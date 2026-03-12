@@ -110,7 +110,7 @@ def stop_workflow(
 
     Args:
         workflow_name: Workflow 名称
-        namespace: 命名空间，默认使用 Config.TARGET_NAMESPACE
+        namespace: 命名空间，默认 chaos-mesh
 
     Returns:
         Chaos Mesh API 响应 JSON
@@ -119,7 +119,7 @@ def stop_workflow(
         ChaosClientError: API 调用失败
     """
     if namespace is None:
-        namespace = Config.TARGET_NAMESPACE
+        namespace = "chaos-mesh"
 
     url = f"{_base_url()}/real_time/workflow/{workflow_name}/stop"
     params = {"namespace": namespace}
