@@ -1,0 +1,31 @@
+/* ISChaos 自定义样式 */
+
+/* 侧边导航项 */
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    color: #4b5563;
+    text-decoration: none;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.nav-item:hover {
+    background-color: #eff6ff;
+    color: #2563eb;
+}
+
+.nav-item.active {
+    background-color: #eff6ff;
+    color: #2563eb;
+    font-weight: 600;
+}
+
+.nav-icon {
+    font-size: 0.625rem;
+    width: 1rem;
+    text-align: center;
+}

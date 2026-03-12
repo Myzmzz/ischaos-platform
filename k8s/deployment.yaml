@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ischaos-platform
+  namespace: ischaos
+  labels:
+    app: ischaos-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ischaos-platform
+  template:
+    metadata:
+      labels:
+        app: ischaos-platform
+    spec:
+      containers:
+        - name: ischaos-platform
+          image: swr.cn-north-4.myhuaweicloud.com/ischaos/ischaos-platform:latest
+          ports:
+            - containerPort: 5000
+          env:
+            - name: CHAOS_MESH_URL
+              value: "http://116.63.51.45:30854"
+            - name: COROOT_URL
+              value: "http://116.63.51.45:30800"
+            - name: COROOT_USERNAME
+              value: "admin"
+            - name: COROOT_PASSWORD
+              value: "123456"
+            - name: COROOT_PROJECT_ID
+              value: "jtcsxpmc"
+            - name: DATABASE_PATH
+              value: "/app/data/ischaos.db"
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          emptyDir: {}
