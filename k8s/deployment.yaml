@@ -15,6 +15,7 @@ spec:
       labels:
         app: ischaos-platform
     spec:
+      serviceAccountName: ischaos-sa
       containers:
         - name: ischaos-platform
           image: swr.cn-north-4.myhuaweicloud.com/ischaos/ischaos-platform:latest

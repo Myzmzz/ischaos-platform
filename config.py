@@ -22,5 +22,10 @@ class Config:
     COROOT_PASSWORD: str = os.getenv("COROOT_PASSWORD", "123456")
     COROOT_PROJECT_ID: str = os.getenv("COROOT_PROJECT_ID", "jtcsxpmc")
 
+    # Kubernetes 配置
+    KUBECONFIG_PATH: str = os.getenv(
+        "KUBECONFIG", os.path.expanduser("~/.kube/coroot-config")
+    )
+
     # 故障注入目标命名空间
     TARGET_NAMESPACE: str = os.getenv("TARGET_NAMESPACE", "train-ticket")
