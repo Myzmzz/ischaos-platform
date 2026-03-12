@@ -76,6 +76,9 @@ def build_workflow(plan: dict) -> Tuple[str, dict]:
         fault_params=fault_params,
     )
 
+    # entry 名称必须与 workflow 名称不同
+    entry_name = f"fault-{plan['id']}-{timestamp}"
+
     # 组装 Workflow JSON — FaultConfig 格式
     # deadline 设为 duration 的 2 倍，给 Recover 留时间
     workflow_json: Dict[str, Any] = {
@@ -86,10 +89,10 @@ def build_workflow(plan: dict) -> Tuple[str, dict]:
             "namespace": "chaos-mesh",
         },
         "spec": {
-            "entry": workflow_name,
+            "entry": entry_name,
             "templates": [
                 {
-                    "name": workflow_name,
+                    "name": entry_name,
                     "templateType": "FaultConfig",
                     "deadline": _double_duration(duration),
                     "list": [
