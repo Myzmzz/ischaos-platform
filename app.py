@@ -3,6 +3,7 @@
 from flask import Flask
 
 from config import Config
+from models.database import init_schema, close_db
 from routes.page_routes import page_bp
 from routes.interface_routes import interface_bp
 from routes.plan_routes import plan_bp
@@ -21,6 +22,12 @@ def create_app() -> Flask:
     app.register_blueprint(plan_bp, url_prefix="/api")
     app.register_blueprint(execution_bp, url_prefix="/api")
     app.register_blueprint(observability_bp, url_prefix="/api/v1")
+
+    # 初始化数据库 schema（建表，幂等操作）
+    init_schema()
+
+    # 每个请求结束后关闭数据库连接
+    app.teardown_appcontext(close_db)
 
     return app
 

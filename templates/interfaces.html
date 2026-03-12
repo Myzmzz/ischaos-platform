@@ -1,7 +1,131 @@
 {% extends "base.html" %}
 
+{% block head %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+{% endblock %}
+
 {% block content %}
-<div class="text-center text-gray-400 mt-20">
-    <p class="text-sm">接口列表 — Step 1 实现</p>
+<div id="app">
+    <!-- 加载状态 -->
+    <div v-if="loading" class="text-center text-gray-400 mt-20">
+        <p class="text-sm">加载中...</p>
+    </div>
+
+    <!-- 错误提示 -->
+    <div v-else-if="error" class="text-center text-red-500 mt-20">
+        <p class="text-sm">[[ error ]]</p>
+    </div>
+
+    <!-- 接口列表表格 -->
+    <div v-else>
+        <div class="mb-4 text-sm text-gray-500">
+            共 <span class="font-semibold text-gray-700">[[ interfaces.length ]]</span> 个业务接口
+        </div>
+
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <table class="w-full text-sm text-left">
+                <thead class="bg-gray-50 text-gray-600 uppercase text-xs">
+                    <tr>
+                        <th class="px-4 py-3 w-12">#</th>
+                        <th class="px-4 py-3">接口名称</th>
+                        <th class="px-4 py-3">请求方式</th>
+                        <th class="px-4 py-3">URL 路径</th>
+                        <th class="px-4 py-3 w-24 text-center">服务数</th>
+                        <th class="px-4 py-3 w-24 text-center">调用边数</th>
+                        <th class="px-4 py-3 w-28 text-center">请求总数</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    <tr v-for="iface in interfaces"
+                        :key="iface.id"
+                        @click="goToTopology(iface.id)"
+                        class="hover:bg-blue-50 cursor-pointer transition-colors">
+                        <td class="px-4 py-3 text-gray-400">[[ iface.id ]]</td>
+                        <td class="px-4 py-3 font-medium text-gray-800">[[ iface.name ]]</td>
+                        <td class="px-4 py-3">
+                            <span :class="methodClass(iface.method)"
+                                  class="px-2 py-0.5 rounded text-xs font-semibold">
+                                [[ iface.method ]]
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-gray-500 font-mono text-xs truncate max-w-xs"
+                            :title="iface.url">
+                            [[ urlPath(iface.url) ]]
+                        </td>
+                        <td class="px-4 py-3 text-center font-semibold text-blue-600">
+                            [[ iface.service_count ]]
+                        </td>
+                        <td class="px-4 py-3 text-center text-gray-600">
+                            [[ iface.edge_count ]]
+                        </td>
+                        <td class="px-4 py-3 text-center text-gray-600">
+                            [[ iface.total_requests ]]
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const { createApp } = Vue;
+
+createApp({
+    delimiters: ['[[', ']]'],
+    data() {
+        return {
+            interfaces: [],
+            loading: true,
+            error: null,
+        };
+    },
+    mounted() {
+        this.fetchInterfaces();
+    },
+    methods: {
+        async fetchInterfaces() {
+            try {
+                const resp = await fetch('/api/interfaces');
+                const json = await resp.json();
+                if (json.code === 200) {
+                    this.interfaces = json.data;
+                } else {
+                    this.error = json.message || '加载失败';
+                }
+            } catch (e) {
+                this.error = '网络请求失败: ' + e.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        goToTopology(id) {
+            window.location.href = '/topology/' + id;
+        },
+
+        /** 从完整 URL 中提取路径部分用于显示 */
+        urlPath(url) {
+            try {
+                return new URL(url).pathname;
+            } catch {
+                return url;
+            }
+        },
+
+        /** 根据 HTTP 方法返回对应的样式类 */
+        methodClass(method) {
+            const map = {
+                'GET': 'bg-green-100 text-green-700',
+                'POST': 'bg-blue-100 text-blue-700',
+                'PUT': 'bg-yellow-100 text-yellow-700',
+                'DELETE': 'bg-red-100 text-red-700',
+            };
+            return map[method] || 'bg-gray-100 text-gray-700';
+        },
+    },
+}).mount('#app');
+</script>
 {% endblock %}
