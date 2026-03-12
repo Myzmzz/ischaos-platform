@@ -6,13 +6,13 @@
 
 import json
 import time
-from typing import Any
+from typing import Any, Dict, Optional, Tuple
 
 from config import Config
 
 
 # 故障类型 → (templateType, action) 映射
-FAULT_TYPE_MAP: dict[str, tuple[str, str | None]] = {
+FAULT_TYPE_MAP: Dict[str, Tuple[str, Optional[str]]] = {
     "network_loss":      ("NetworkChaos", "loss"),
     "network_delay":     ("NetworkChaos", "delay"),
     "network_partition": ("NetworkChaos", "partition"),
@@ -99,11 +99,11 @@ def build_workflow(plan: dict[str, Any]) -> tuple[str, dict[str, Any]]:
 def _build_template_spec(
     fault_type: str,
     template_type: str,
-    action: str | None,
+    action: Optional[str],
     target_service: str,
     namespace: str,
-    fault_params: dict[str, Any],
-) -> dict[str, Any]:
+    fault_params: Dict[str, Any],
+) -> Dict[str, Any]:
     """根据故障类型构建模板内部的 spec 字段。
 
     Args:

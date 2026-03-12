@@ -5,7 +5,7 @@
 """
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 import requests
 
@@ -20,7 +20,7 @@ REQUEST_TIMEOUT = 10
 class ChaosClientError(Exception):
     """Chaos Mesh API 调用异常。"""
 
-    def __init__(self, message: str, status_code: int | None = None):
+    def __init__(self, message: str, status_code: Optional[int] = None):
         super().__init__(message)
         self.status_code = status_code
 
@@ -63,7 +63,7 @@ def create_workflow(workflow_json: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_workflow_status(
-    workflow_name: str, namespace: str | None = None
+    workflow_name: str, namespace: Optional[str] = None
 ) -> dict[str, Any]:
     """查询 Workflow 运行状态。
 
@@ -101,7 +101,7 @@ def get_workflow_status(
 
 
 def stop_workflow(
-    workflow_name: str, namespace: str | None = None
+    workflow_name: str, namespace: Optional[str] = None
 ) -> dict[str, Any]:
     """停止正在运行的 Workflow。
 
