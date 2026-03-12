@@ -29,6 +29,12 @@ def plans():
     return render_template("plans.html", page_title="演练计划")
 
 
+@page_bp.route("/executions")
+def executions():
+    """演练记录列表页。"""
+    return render_template("executions.html", page_title="演练记录")
+
+
 @page_bp.route("/executions/<int:execution_id>")
 def execution_detail(execution_id: int):
     """执行详情页。"""

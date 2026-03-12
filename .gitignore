@@ -3,4 +3,7 @@ __pycache__/
 *.pyc
 *.pyo
 data/ischaos.db
+data/ischaos.db-wal
+data/ischaos.db-shm
 .env
+logs/

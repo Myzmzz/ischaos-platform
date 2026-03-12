@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ISChaos - {% block title %}{{ page_title | default('首页') }}{% endblock %}</title>
+    <title>ISChaos-sub - {% block title %}{{ page_title | default('首页') }}{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
     {% block head %}{% endblock %}
@@ -13,8 +13,8 @@
     <!-- 侧边导航 -->
     <aside class="w-56 bg-white border-r border-gray-200 min-h-screen flex flex-col">
         <div class="px-5 py-4 border-b border-gray-200">
-            <h1 class="text-lg font-bold text-blue-600">ISChaos</h1>
-            <p class="text-xs text-gray-400 mt-0.5">混沌工程演练平台</p>
+            <h1 class="text-lg font-bold text-blue-600">ISChaos-sub</h1>
+            <p class="text-xs text-gray-400 mt-0.5">第二代混沌工程演练平台</p>
         </div>
         <nav class="flex-1 px-3 py-4 space-y-1">
             <a href="/" class="nav-item {% if page_title == '首页' %}active{% endif %}">
@@ -25,6 +25,9 @@
             </a>
             <a href="/plans" class="nav-item {% if page_title == '演练计划' %}active{% endif %}">
                 <span class="nav-icon">&#9654;</span> 演练计划
+            </a>
+            <a href="/executions" class="nav-item {% if page_title in ('演练记录', '执行详情') %}active{% endif %}">
+                <span class="nav-icon">&#9679;</span> 演练记录
             </a>
         </nav>
         <div class="px-5 py-3 border-t border-gray-200 text-xs text-gray-400">
@@ -41,7 +44,7 @@
             {% block content %}
             <div class="text-center text-gray-400 mt-20">
                 <p class="text-4xl mb-4">&#9881;</p>
-                <p class="text-lg">欢迎使用 ISChaos 混沌工程演练平台</p>
+                <p class="text-lg">欢迎使用 ISChaos-sub 第二代混沌工程演练平台</p>
                 <p class="text-sm mt-2">从左侧导航开始操作</p>
             </div>
             {% endblock %}

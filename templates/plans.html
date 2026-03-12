@@ -128,6 +128,8 @@
         <div v-if="execMessage" class="mt-4 text-sm px-4 py-3 rounded-lg"
              :class="execError ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'">
             [[ execMessage ]]
+            <a v-if="execId && !execError" :href="'/executions/' + execId"
+               class="ml-2 underline font-medium">查看执行详情 &rarr;</a>
         </div>
     </div>
 
@@ -195,6 +197,7 @@ createApp({
             executing: null,
             execMessage: '',
             execError: false,
+            execId: null,
             workflowModal: null,  // { name, json, highlighted }
             copied: false,
         };
@@ -298,6 +301,7 @@ createApp({
                 const json = await resp.json();
                 if (json.code === 200) {
                     this.execMessage = `计划「${plan.name}」已开始执行，执行 ID: ${json.data.id}`;
+                    this.execId = json.data.id;
                     this.execError = false;
                 } else {
                     this.execMessage = json.message || '执行失败';

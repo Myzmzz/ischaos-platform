@@ -18,7 +18,7 @@ spec:
       serviceAccountName: ischaos-sa
       containers:
         - name: ischaos-platform
-          image: swr.cn-north-4.myhuaweicloud.com/ischaos/ischaos-platform:latest
+          image: 1.94.151.57:85/ischaos/ischaos-platform:20260312173744
           ports:
             - containerPort: 5000
           env:

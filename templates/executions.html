@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+
+{% block head %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<style>
+    .exec-badge { padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+    .exec-pending   { background: #f1f5f9; color: #64748b; }
+    .exec-running   { background: #dbeafe; color: #2563eb; }
+    .exec-collecting { background: #fef3c7; color: #d97706; }
+    .exec-completed { background: #dcfce7; color: #16a34a; }
+    .exec-failed    { background: #fee2e2; color: #dc2626; }
+
+    .fault-badge { padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 500; font-family: monospace; }
+    .fault-network   { background: #eff6ff; color: #2563eb; }
+    .fault-pod       { background: #fef2f2; color: #dc2626; }
+    .fault-stress    { background: #fefce8; color: #ca8a04; }
+    .fault-other     { background: #f5f3ff; color: #7c3aed; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="app">
+    <!-- 加载 -->
+    <div v-if="loading" class="text-center text-gray-400 mt-20">
+        <p class="text-sm">加载中...</p>
+    </div>
+
+    <!-- 错误 -->
+    <div v-else-if="error" class="text-center text-red-500 mt-20">
+        <p class="text-sm">[[ error ]]</p>
+    </div>
+
+    <!-- 列表 -->
+    <div v-else>
+        <div class="mb-4 flex items-center justify-between">
+            <div class="text-sm text-gray-500">
+                共 <span class="font-semibold text-gray-700">[[ executions.length ]]</span> 条演练记录
+            </div>
+            <button @click="fetchData"
+                    class="px-2.5 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50">
+                刷新
+            </button>
+        </div>
+
+        <!-- 空状态 -->
+        <div v-if="executions.length === 0" class="text-center text-gray-400 mt-16">
+            <svg class="mx-auto mb-3" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+            </svg>
+            <p class="text-sm">暂无演练记录</p>
+            <p class="text-xs mt-1">前往 <a href="/plans" class="text-blue-600 hover:underline">演练计划</a> 页面执行计划</p>
+        </div>
+
+        <!-- 表格 -->
+        <div v-else class="bg-white rounded-lg shadow overflow-hidden">
+            <table class="w-full text-sm text-left">
+                <thead class="bg-gray-50 text-gray-600 uppercase text-xs">
+                    <tr>
+                        <th class="px-4 py-3 w-12">#</th>
+                        <th class="px-4 py-3">计划名称</th>
+                        <th class="px-4 py-3">故障类型</th>
+                        <th class="px-4 py-3">目标服务</th>
+                        <th class="px-4 py-3 w-24 text-center">状态</th>
+                        <th class="px-4 py-3 w-44 text-center">开始时间</th>
+                        <th class="px-4 py-3 w-44 text-center">结束时间</th>
+                        <th class="px-4 py-3 w-24 text-center">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    <tr v-for="ex in executions" :key="ex.id"
+                        class="hover:bg-gray-50 transition-colors cursor-pointer"
+                        @click="goDetail(ex.id)">
+                        <td class="px-4 py-3 text-gray-400">[[ ex.id ]]</td>
+                        <td class="px-4 py-3 font-medium text-gray-800">[[ ex.plan_name ]]</td>
+                        <td class="px-4 py-3">
+                            <span class="fault-badge" :class="faultBadgeClass(ex.fault_type)">
+                                [[ faultTypeLabel(ex.fault_type) ]]
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-gray-600 font-mono text-xs">[[ ex.target_service ]]</td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="exec-badge" :class="'exec-' + ex.status">[[ statusLabel(ex.status) ]]</span>
+                        </td>
+                        <td class="px-4 py-3 text-center text-xs text-gray-400">[[ ex.started_at || '-' ]]</td>
+                        <td class="px-4 py-3 text-center text-xs text-gray-400">[[ ex.finished_at || '-' ]]</td>
+                        <td class="px-4 py-3 text-center" @click.stop>
+                            <div class="flex items-center justify-center gap-1.5">
+                                <a :href="'/executions/' + ex.id"
+                                   class="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 inline-block">
+                                    详情
+                                </a>
+                                <button v-if="ex.status !== 'running'"
+                                        @click="confirmDelete(ex)"
+                                        class="px-2 py-1 text-xs border border-red-300 text-red-500 rounded hover:bg-red-50">
+                                    删除
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 删除确认弹窗 -->
+    <div v-if="deleteTarget" class="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl w-80 p-6 shadow-lg text-center">
+            <p class="text-sm font-semibold text-gray-800 mb-2">确认删除</p>
+            <p class="text-xs text-gray-500 mb-4">确定要删除执行记录 #[[ deleteTarget.id ]] 吗？此操作不可恢复。</p>
+            <div class="flex justify-center gap-2">
+                <button @click="deleteTarget = null"
+                        class="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50">取消</button>
+                <button @click="doDelete"
+                        :disabled="deleting"
+                        class="px-3 py-1.5 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">
+                    [[ deleting ? '删除中...' : '确认删除' ]]
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const FAULT_TYPE_LABELS = {
+    network_delay: '网络延迟', network_loss: '网络丢包', network_partition: '网络隔离',
+    pod_failure: 'Pod 故障', pod_kill: 'Pod 终止',
+    stress_cpu: 'CPU 压力', stress_mem: '内存压力',
+    dns_error: 'DNS 错误', node_cpu: '节点CPU压力', node_mem: '节点内存压力',
+};
+const STATUS_LABELS = {
+    pending: '等待中', running: '运行中', collecting: '数据收集中',
+    completed: '已完成', failed: '失败',
+};
+
+const { createApp } = Vue;
+
+createApp({
+    delimiters: ['[[', ']]'],
+    data() {
+        return {
+            executions: [],
+            loading: true,
+            error: null,
+            deleteTarget: null,
+            deleting: false,
+        };
+    },
+    mounted() {
+        this.fetchData();
+    },
+    methods: {
+        async fetchData() {
+            this.loading = true;
+            try {
+                const resp = await fetch('/api/executions');
+                const json = await resp.json();
+                if (json.code === 200) {
+                    this.executions = json.data;
+                } else {
+                    this.error = json.message || '加载失败';
+                }
+            } catch (e) {
+                this.error = '网络请求失败: ' + e.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        faultTypeLabel(ft) { return FAULT_TYPE_LABELS[ft] || ft || '-'; },
+        statusLabel(s) { return STATUS_LABELS[s] || s; },
+
+        faultBadgeClass(ft) {
+            if (!ft) return 'fault-other';
+            if (ft.startsWith('network_')) return 'fault-network';
+            if (ft.startsWith('pod_')) return 'fault-pod';
+            if (ft.startsWith('stress_')) return 'fault-stress';
+            return 'fault-other';
+        },
+
+        goDetail(id) {
+            window.location.href = '/executions/' + id;
+        },
+
+        confirmDelete(ex) {
+            this.deleteTarget = ex;
+        },
+
+        async doDelete() {
+            if (!this.deleteTarget) return;
+            this.deleting = true;
+            try {
+                const resp = await fetch(`/api/executions/${this.deleteTarget.id}`, { method: 'DELETE' });
+                const json = await resp.json();
+                if (json.code === 200) {
+                    this.executions = this.executions.filter(e => e.id !== this.deleteTarget.id);
+                    this.deleteTarget = null;
+                } else {
+                    alert(json.message || '删除失败');
+                }
+            } catch (e) {
+                alert('网络请求失败: ' + e.message);
+            } finally {
+                this.deleting = false;
+            }
+        },
+    },
+}).mount('#app');
+</script>
+{% endblock %}

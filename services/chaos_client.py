@@ -43,21 +43,30 @@ def create_workflow(workflow_json: dict[str, Any]) -> dict[str, Any]:
         ChaosClientError: API 调用失败
     """
     url = f"{_base_url()}/real_time/workflow"
-    logger.info("创建 Workflow: POST %s", url)
 
     # Dashboard API 要求请求体包裹在 {"workflow": ..., "k6": {}} 中
     payload = {"workflow": workflow_json, "k6": {}}
 
+    logger.debug(
+        "[ChaosClient] >>> POST %s\n    Body: %s",
+        url, _safe_json(payload),
+    )
+
     try:
         resp = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
+        _log_response("POST", url, resp)
         resp.raise_for_status()
-        return resp.json()
+        # Chaos Mesh 成功时可能返回 200 + 空 body
+        result = _parse_response_body(resp)
+        # Chaos Mesh 失败时也可能返回 200，但 body 中包含 error 信息
+        return result
     except requests.exceptions.Timeout:
+        logger.error("[ChaosClient] POST %s TIMEOUT", url)
         raise ChaosClientError("Chaos Mesh API 请求超时")
     except requests.exceptions.ConnectionError:
+        logger.error("[ChaosClient] POST %s CONNECTION ERROR", url)
         raise ChaosClientError("无法连接 Chaos Mesh API")
     except requests.exceptions.HTTPError as e:
-        # 尝试从响应体获取错误信息
         error_msg = _extract_error_message(e.response)
         raise ChaosClientError(
             f"Chaos Mesh API 返回错误: {error_msg}",
@@ -85,15 +94,23 @@ def get_workflow_status(
 
     url = f"{_base_url()}/real_time/workflow/{workflow_name}/summary"
     params = {"namespace": namespace}
-    logger.info("查询 Workflow 状态: GET %s", url)
+
+    logger.debug(
+        "[ChaosClient] >>> GET %s\n    Params: %s",
+        url, params,
+    )
 
     try:
         resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
+        _log_response("GET", url, resp)
         resp.raise_for_status()
-        return resp.json()
+        result = _parse_response_body(resp)
+        return result
     except requests.exceptions.Timeout:
+        logger.error("[ChaosClient] GET %s TIMEOUT", url)
         raise ChaosClientError("Chaos Mesh API 请求超时")
     except requests.exceptions.ConnectionError:
+        logger.error("[ChaosClient] GET %s CONNECTION ERROR", url)
         raise ChaosClientError("无法连接 Chaos Mesh API")
     except requests.exceptions.HTTPError as e:
         error_msg = _extract_error_message(e.response)
@@ -123,18 +140,23 @@ def stop_workflow(
 
     url = f"{_base_url()}/real_time/workflow/{workflow_name}/stop"
     params = {"namespace": namespace}
-    logger.info("停止 Workflow: PUT %s", url)
+
+    logger.debug(
+        "[ChaosClient] >>> PUT %s\n    Params: %s",
+        url, params,
+    )
 
     try:
         resp = requests.put(url, params=params, timeout=REQUEST_TIMEOUT)
+        _log_response("PUT", url, resp)
         resp.raise_for_status()
-        # 部分 Chaos Mesh 版本停止操作返回空 body
-        if resp.text:
-            return resp.json()
-        return {"status": "stopped"}
+        result = _parse_response_body(resp)
+        return result
     except requests.exceptions.Timeout:
+        logger.error("[ChaosClient] PUT %s TIMEOUT", url)
         raise ChaosClientError("Chaos Mesh API 请求超时")
     except requests.exceptions.ConnectionError:
+        logger.error("[ChaosClient] PUT %s CONNECTION ERROR", url)
         raise ChaosClientError("无法连接 Chaos Mesh API")
     except requests.exceptions.HTTPError as e:
         error_msg = _extract_error_message(e.response)
@@ -142,6 +164,20 @@ def stop_workflow(
             f"停止 Workflow 失败: {error_msg}",
             status_code=e.response.status_code,
         )
+
+
+def _parse_response_body(resp: requests.Response) -> dict[str, Any]:
+    """安全解析响应体 JSON，空 body 返回空字典。"""
+    if not resp.text or not resp.text.strip():
+        return {"status": "ok"}
+    try:
+        return resp.json()
+    except (ValueError, requests.exceptions.JSONDecodeError):
+        logger.warning(
+            "[ChaosClient] 响应体非 JSON: %s", resp.text[:500],
+        )
+        return {"raw_response": resp.text[:500]}
+
 
 
 def _extract_error_message(response: requests.Response) -> str:
@@ -152,3 +188,24 @@ def _extract_error_message(response: requests.Response) -> str:
         return body.get("message") or body.get("error") or str(body)
     except Exception:
         return response.text or f"HTTP {response.status_code}"
+
+
+def _log_response(method: str, url: str, resp: requests.Response) -> None:
+    """记录 HTTP 响应详情。"""
+    body_text = resp.text[:3000] if resp.text else "(empty)"
+    logger.debug(
+        "[ChaosClient] <<< %s %s %d\n    Response: %s",
+        method, url, resp.status_code, body_text,
+    )
+
+
+def _safe_json(obj: Any) -> str:
+    """安全地将对象序列化为 JSON 字符串（用于日志）。"""
+    import json
+    try:
+        text = json.dumps(obj, ensure_ascii=False, indent=2)
+        if len(text) > 3000:
+            return text[:3000] + "...(truncated)"
+        return text
+    except (TypeError, ValueError):
+        return str(obj)[:3000]

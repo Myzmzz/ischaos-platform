@@ -100,6 +100,13 @@ def update_status(execution_id: int, status: str, **kwargs: Any) -> None:
     db.commit()
 
 
+def delete_by_id(execution_id: int) -> None:
+    """根据 ID 删除执行记录。"""
+    db = get_db()
+    db.execute("DELETE FROM drill_execution WHERE id = ?", (execution_id,))
+    db.commit()
+
+
 def list_all() -> list[dict[str, Any]]:
     """查询所有执行记录，按创建时间倒序。"""
     db = get_db()

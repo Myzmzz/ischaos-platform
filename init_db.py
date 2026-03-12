@@ -237,7 +237,7 @@ def main() -> None:
 
     os.makedirs("data", exist_ok=True)
 
-    print("=== ISChaos 数据库初始化（MongoDB 拓扑修正版）===")
+    print("=== ISChaos-sub 数据库初始化（MongoDB 拓扑修正版）===")
     print(f"数据库: {os.path.abspath(Config.DATABASE_PATH)}")
     print(f"数据源: {report_path}")
     print()
