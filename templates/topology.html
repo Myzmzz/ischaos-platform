@@ -1,7 +1,242 @@
 {% extends "base.html" %}
 
+{% block head %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<style>
+    #topo-container {
+        width: 100%;
+        height: calc(100vh - 13rem);
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        background: #fafbfc;
+        position: relative;
+    }
+    #topo-container svg:focus { outline: none; }
+
+    /* ── 右上角脉冲圆点（有故障节点） ── */
+    .topo-pulse-dot {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #dc2626;
+        box-shadow: 0 0 0 0 rgba(220,38,38,0.6);
+        animation: topo-pulse 1.5s infinite;
+    }
+    @keyframes topo-pulse {
+        0%   { box-shadow: 0 0 0 0 rgba(220,38,38,0.6); }
+        70%  { box-shadow: 0 0 0 8px rgba(220,38,38,0); }
+        100% { box-shadow: 0 0 0 0 rgba(220,38,38,0); }
+    }
+
+    /* ── 故障配置弹窗 ── */
+    .modal-overlay {
+        position: fixed; inset: 0; z-index: 50;
+        background: rgba(0,0,0,0.3); backdrop-filter: blur(2px);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .modal-card {
+        background: #fff; border-radius: 12px; width: 420px; max-height: 80vh;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.15); overflow-y: auto;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="text-center text-gray-400 mt-20">
-    <p class="text-sm">链路拓扑 — Step 2 实现</p>
+<div id="app">
+    <!-- 顶部信息栏 -->
+    <div v-if="iface" class="mb-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <a href="/interfaces" class="text-gray-400 hover:text-blue-600 text-sm">&larr; 返回列表</a>
+            <span class="text-gray-300">|</span>
+            <h3 class="text-base font-semibold text-gray-800">[[ iface.name ]]</h3>
+            <span class="px-2 py-0.5 rounded text-xs font-semibold"
+                  :class="iface.method === 'GET' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'">
+                [[ iface.method ]]
+            </span>
+            <span class="text-xs text-gray-400 font-mono">[[ iface.span_name ]]</span>
+        </div>
+        <div class="flex items-center gap-3 text-xs text-gray-500">
+            <span>服务 <strong class="text-blue-600">[[ serviceCount ]]</strong></span>
+            <span>调用边 <strong>[[ edgeCount ]]</strong></span>
+            <div class="flex items-center border border-gray-300 rounded overflow-hidden ml-2">
+                <button @click="zoomIn"  class="px-2.5 py-1 hover:bg-gray-100 border-r border-gray-300" title="放大">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="6" cy="6" r="4.5"/><line x1="9.2" y1="9.2" x2="13" y2="13"/>
+                        <line x1="4" y1="6" x2="8" y2="6"/><line x1="6" y1="4" x2="6" y2="8"/>
+                    </svg>
+                </button>
+                <button @click="zoomOut" class="px-2.5 py-1 hover:bg-gray-100 border-r border-gray-300" title="缩小">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="6" cy="6" r="4.5"/><line x1="9.2" y1="9.2" x2="13" y2="13"/>
+                        <line x1="4" y1="6" x2="8" y2="6"/>
+                    </svg>
+                </button>
+                <button @click="fitView" class="px-2.5 py-1 hover:bg-gray-100" title="适配画布">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="1" y="1" width="12" height="12" rx="2"/>
+                        <polyline points="4,1 4,4 1,4"/><polyline points="10,1 10,4 13,4"/>
+                        <polyline points="4,13 4,10 1,10"/><polyline points="10,13 10,10 13,10"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载 / 错误 -->
+    <div v-if="loading" class="text-center text-gray-400 mt-20">加载中...</div>
+    <div v-else-if="error" class="text-center text-red-500 mt-20">[[ error ]]</div>
+
+    <!-- X6 画布容器 -->
+    <div v-show="iface" id="topo-container"></div>
+
+    <!-- 图例 -->
+    <div v-if="iface" class="mt-3 flex items-center gap-5 text-xs text-gray-500">
+        <div class="flex items-center gap-1.5">
+            <div style="width:14px;height:10px;border:2px solid #2563eb;border-radius:3px;border-left:3px solid #2563eb;"></div>
+            <span>入口服务</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <div style="width:14px;height:10px;border:1px solid #e5e7eb;border-radius:3px;background:#fff;"></div>
+            <span>微服务</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <div style="width:14px;height:10px;border:1px dashed #d1d5db;border-radius:3px;background:#f9fafb;"></div>
+            <span>数据库</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <svg width="20" height="10"><line x1="0" y1="5" x2="16" y2="5" stroke="#94a3b8" stroke-width="1"/>
+            <polygon points="16,2.5 20,5 16,7.5" fill="#94a3b8"/></svg>
+            <span>HTTP 调用</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <svg width="20" height="10"><line x1="0" y1="5" x2="16" y2="5" stroke="#d1d5db" stroke-width="1" stroke-dasharray="3,2"/>
+            <polygon points="16,2.5 20,5 16,7.5" fill="none" stroke="#d1d5db"/></svg>
+            <span>DB 连接</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <div style="width:8px;height:8px;border-radius:50%;background:#dc2626;"></div>
+            <span>故障注入中</span>
+        </div>
+    </div>
+
+    <!-- 故障配置弹窗（占位，Step 3 完善） -->
+    <div v-if="modalVisible" class="modal-overlay" @click.self="modalVisible = false">
+        <div class="modal-card">
+            <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-gray-800">故障配置 — [[ modalService ]]</h3>
+                <button @click="modalVisible = false" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <div class="px-5 py-6 text-center text-gray-400 text-sm">
+                <p>故障类型选择与参数配置</p>
+                <p class="mt-1 text-xs">（将在 Step 3 演练计划模块中完善）</p>
+            </div>
+            <div class="px-5 py-3 border-t border-gray-200 flex justify-end gap-2">
+                <button @click="modalVisible = false"
+                        class="px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50">取消</button>
+                <button class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 opacity-50 cursor-not-allowed"
+                        disabled>确认配置</button>
+            </div>
+        </div>
+    </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<!-- topology.js 是 ES Module，通过 esm.sh 导入 X6 v2 + dagre -->
+<script type="module" src="{{ url_for('static', filename='js/topology.js') }}"></script>
+<script>
+/**
+ * Vue 应用：等待 topology.js（ES module）加载完成后挂载 TopologyRenderer。
+ * ES module 是 deferred 的，所以用轮询等待 window.TopologyRenderer 就绪。
+ */
+const INTERFACE_ID = {{ interface_id }};
+
+function bootApp() {
+    const { createApp } = Vue;
+
+    createApp({
+        delimiters: ['[[', ']]'],
+        data() {
+            return {
+                iface: null,
+                loading: true,
+                error: null,
+                graph: null,
+                modalVisible: false,
+                modalService: '',
+            };
+        },
+        computed: {
+            serviceCount() {
+                if (!this.iface) return 0;
+                return this.iface.topology.nodes.filter(n => n.type === 'service').length;
+            },
+            edgeCount() {
+                return this.iface ? this.iface.topology.edges.length : 0;
+            },
+        },
+        mounted() {
+            this.fetchAndRender();
+        },
+        beforeUnmount() {
+            if (this.graph) this.graph.dispose();
+        },
+        methods: {
+            async fetchAndRender() {
+                try {
+                    const resp = await fetch(`/api/interfaces/${INTERFACE_ID}`);
+                    const json = await resp.json();
+                    if (json.code !== 200) {
+                        this.error = json.message || '加载失败';
+                        return;
+                    }
+                    this.iface = json.data;
+                    // 等待 TopologyRenderer 就绪（ES module 异步加载）
+                    await this.waitForRenderer();
+                    this.$nextTick(() => {
+                        this.graph = window.TopologyRenderer.render(
+                            document.getElementById('topo-container'),
+                            this.iface.topology,
+                            {
+                                faultServices: new Set(),
+                                onNodeClick: (nodeId) => {
+                                    this.modalService = nodeId;
+                                    this.modalVisible = true;
+                                },
+                            },
+                        );
+                    });
+                } catch (e) {
+                    this.error = '网络请求失败: ' + e.message;
+                } finally {
+                    this.loading = false;
+                }
+            },
+            waitForRenderer() {
+                return new Promise((resolve) => {
+                    if (window.TopologyRenderer) { resolve(); return; }
+                    const timer = setInterval(() => {
+                        if (window.TopologyRenderer) { clearInterval(timer); resolve(); }
+                    }, 50);
+                    // 超时 15 秒后放弃
+                    setTimeout(() => { clearInterval(timer); resolve(); }, 15000);
+                });
+            },
+            zoomIn()  { if (this.graph) this.graph.zoom(0.2); },
+            zoomOut() { if (this.graph) this.graph.zoom(-0.2); },
+            fitView() { if (this.graph) this.graph.zoomToFit({ padding: 50, maxScale: 1.2 }); },
+        },
+    }).mount('#app');
+}
+
+// DOM ready 后启动
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootApp);
+} else {
+    bootApp();
+}
+</script>
 {% endblock %}
