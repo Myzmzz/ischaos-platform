@@ -1,7 +1,232 @@
 {% extends "base.html" %}
 
+{% block head %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<style>
+    .status-badge { padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+    .status-draft    { background: #f1f5f9; color: #64748b; }
+    .status-ready    { background: #dcfce7; color: #16a34a; }
+    .status-archived { background: #fef3c7; color: #d97706; }
+    .fault-badge { padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 500; font-family: monospace; }
+    .fault-network   { background: #eff6ff; color: #2563eb; }
+    .fault-pod       { background: #fef2f2; color: #dc2626; }
+    .fault-stress    { background: #fefce8; color: #ca8a04; }
+    .fault-other     { background: #f5f3ff; color: #7c3aed; }
+
+    /* 删除确认弹窗 */
+    .confirm-overlay {
+        position: fixed; inset: 0; z-index: 50;
+        background: rgba(0,0,0,0.3); backdrop-filter: blur(2px);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .confirm-card {
+        background: #fff; border-radius: 12px; width: 360px; padding: 24px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="text-center text-gray-400 mt-20">
-    <p class="text-sm">演练计划 — Step 3 实现</p>
+<div id="app">
+    <!-- 加载状态 -->
+    <div v-if="loading" class="text-center text-gray-400 mt-20">
+        <p class="text-sm">加载中...</p>
+    </div>
+
+    <!-- 错误提示 -->
+    <div v-else-if="error" class="text-center text-red-500 mt-20">
+        <p class="text-sm">[[ error ]]</p>
+    </div>
+
+    <!-- 计划列表 -->
+    <div v-else>
+        <div class="mb-4 flex items-center justify-between">
+            <div class="text-sm text-gray-500">
+                共 <span class="font-semibold text-gray-700">[[ plans.length ]]</span> 个演练计划
+            </div>
+        </div>
+
+        <!-- 空状态 -->
+        <div v-if="plans.length === 0" class="text-center text-gray-400 mt-16">
+            <svg class="mx-auto mb-3" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">
+                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+            <p class="text-sm">暂无演练计划</p>
+            <p class="text-xs mt-1">前往 <a href="/interfaces" class="text-blue-600 hover:underline">接口列表</a> → 拓扑页面 → 点击服务节点创建计划</p>
+        </div>
+
+        <!-- 表格 -->
+        <div v-else class="bg-white rounded-lg shadow overflow-hidden">
+            <table class="w-full text-sm text-left">
+                <thead class="bg-gray-50 text-gray-600 uppercase text-xs">
+                    <tr>
+                        <th class="px-4 py-3 w-12">#</th>
+                        <th class="px-4 py-3">计划名称</th>
+                        <th class="px-4 py-3">故障类型</th>
+                        <th class="px-4 py-3">目标服务</th>
+                        <th class="px-4 py-3 w-20 text-center">持续时间</th>
+                        <th class="px-4 py-3 w-20 text-center">状态</th>
+                        <th class="px-4 py-3 w-40 text-center">创建时间</th>
+                        <th class="px-4 py-3 w-32 text-center">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    <tr v-for="plan in plans" :key="plan.id" class="hover:bg-gray-50 transition-colors">
+                        <td class="px-4 py-3 text-gray-400">[[ plan.id ]]</td>
+                        <td class="px-4 py-3 font-medium text-gray-800">[[ plan.name ]]</td>
+                        <td class="px-4 py-3">
+                            <span class="fault-badge" :class="faultBadgeClass(plan.fault_type)">
+                                [[ faultTypeLabel(plan.fault_type) ]]
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-gray-600 font-mono text-xs">[[ plan.target_service ]]</td>
+                        <td class="px-4 py-3 text-center text-gray-600">[[ plan.duration ]]</td>
+                        <td class="px-4 py-3 text-center">
+                            <span class="status-badge" :class="'status-' + plan.status">[[ statusLabel(plan.status) ]]</span>
+                        </td>
+                        <td class="px-4 py-3 text-center text-xs text-gray-400">[[ plan.created_at ]]</td>
+                        <td class="px-4 py-3 text-center">
+                            <div class="flex items-center justify-center gap-1">
+                                <button v-if="plan.status === 'ready'"
+                                        @click="executePlan(plan)"
+                                        class="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                                        :disabled="executing === plan.id">
+                                    [[ executing === plan.id ? '执行中...' : '执行' ]]
+                                </button>
+                                <button @click="confirmDelete(plan)"
+                                        class="px-2 py-1 text-xs border border-gray-300 text-gray-500 rounded hover:bg-red-50 hover:text-red-600 hover:border-red-300">
+                                    删除
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 执行结果提示 -->
+        <div v-if="execMessage" class="mt-4 text-sm px-4 py-3 rounded-lg"
+             :class="execError ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'">
+            [[ execMessage ]]
+        </div>
+    </div>
+
+    <!-- 删除确认弹窗 -->
+    <div v-if="deleteTarget" class="confirm-overlay" @click.self="deleteTarget = null">
+        <div class="confirm-card text-center">
+            <p class="text-sm font-semibold text-gray-800 mb-2">确认删除</p>
+            <p class="text-xs text-gray-500 mb-4">确定要删除计划「[[ deleteTarget.name ]]」吗？此操作不可撤销。</p>
+            <div class="flex justify-center gap-2">
+                <button @click="deleteTarget = null"
+                        class="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50">取消</button>
+                <button @click="doDelete"
+                        class="px-3 py-1.5 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700">确认删除</button>
+            </div>
+        </div>
+    </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const FAULT_TYPE_LABELS = {
+    network_delay: '网络延迟', network_loss: '网络丢包', network_partition: '网络隔离',
+    pod_failure: 'Pod 故障', pod_kill: 'Pod 终止',
+    stress_cpu: 'CPU 压力', stress_mem: '内存压力',
+    dns_error: 'DNS 错误', node_cpu: '节点CPU压力', node_mem: '节点内存压力',
+};
+const STATUS_LABELS = { draft: '草稿', ready: '就绪', archived: '已归档' };
+
+const { createApp } = Vue;
+
+createApp({
+    delimiters: ['[[', ']]'],
+    data() {
+        return {
+            plans: [],
+            loading: true,
+            error: null,
+            deleteTarget: null,
+            executing: null,
+            execMessage: '',
+            execError: false,
+        };
+    },
+    mounted() {
+        this.fetchPlans();
+    },
+    methods: {
+        async fetchPlans() {
+            try {
+                const resp = await fetch('/api/plans');
+                const json = await resp.json();
+                if (json.code === 200) {
+                    this.plans = json.data;
+                } else {
+                    this.error = json.message || '加载失败';
+                }
+            } catch (e) {
+                this.error = '网络请求失败: ' + e.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        faultTypeLabel(ft) {
+            return FAULT_TYPE_LABELS[ft] || ft;
+        },
+
+        statusLabel(s) {
+            return STATUS_LABELS[s] || s;
+        },
+
+        faultBadgeClass(ft) {
+            if (ft.startsWith('network_')) return 'fault-network';
+            if (ft.startsWith('pod_')) return 'fault-pod';
+            if (ft.startsWith('stress_')) return 'fault-stress';
+            return 'fault-other';
+        },
+
+        confirmDelete(plan) {
+            this.deleteTarget = plan;
+        },
+
+        async doDelete() {
+            const plan = this.deleteTarget;
+            this.deleteTarget = null;
+            try {
+                const resp = await fetch(`/api/plans/${plan.id}`, { method: 'DELETE' });
+                const json = await resp.json();
+                if (json.code === 200) {
+                    this.plans = this.plans.filter(p => p.id !== plan.id);
+                }
+            } catch (e) {
+                // 静默处理
+            }
+        },
+
+        async executePlan(plan) {
+            this.executing = plan.id;
+            this.execMessage = '';
+            this.execError = false;
+            try {
+                const resp = await fetch(`/api/plans/${plan.id}/execute`, { method: 'POST' });
+                const json = await resp.json();
+                if (json.code === 200) {
+                    this.execMessage = `计划「${plan.name}」已开始执行，执行 ID: ${json.data.id}`;
+                    this.execError = false;
+                } else {
+                    this.execMessage = json.message || '执行失败';
+                    this.execError = true;
+                }
+            } catch (e) {
+                this.execMessage = '网络请求失败: ' + e.message;
+                this.execError = true;
+            } finally {
+                this.executing = null;
+            }
+        },
+    },
+}).mount('#app');
+</script>
 {% endblock %}

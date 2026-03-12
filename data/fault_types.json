@@ -1,0 +1,98 @@
+{
+  "network_delay": {
+    "label": "网络延迟",
+    "group": "网络故障",
+    "templateType": "NetworkChaos",
+    "action": "delay",
+    "params": [
+      { "key": "latency", "label": "延迟", "type": "text", "default": "200ms", "placeholder": "如 200ms" },
+      { "key": "jitter", "label": "抖动", "type": "text", "default": "0ms", "placeholder": "如 50ms" },
+      { "key": "correlation", "label": "相关性(%)", "type": "text", "default": "0", "placeholder": "0-100" }
+    ]
+  },
+  "network_loss": {
+    "label": "网络丢包",
+    "group": "网络故障",
+    "templateType": "NetworkChaos",
+    "action": "loss",
+    "params": [
+      { "key": "loss", "label": "丢包率(%)", "type": "text", "default": "50", "placeholder": "0-100" },
+      { "key": "correlation", "label": "相关性(%)", "type": "text", "default": "0", "placeholder": "0-100" }
+    ]
+  },
+  "network_partition": {
+    "label": "网络隔离",
+    "group": "网络故障",
+    "templateType": "NetworkChaos",
+    "action": "partition",
+    "params": [
+      { "key": "direction", "label": "方向", "type": "select", "default": "both", "options": ["both", "to", "from"] }
+    ]
+  },
+  "pod_failure": {
+    "label": "Pod 故障",
+    "group": "Pod 故障",
+    "templateType": "PodChaos",
+    "action": "pod-failure",
+    "params": []
+  },
+  "pod_kill": {
+    "label": "Pod 终止",
+    "group": "Pod 故障",
+    "templateType": "PodChaos",
+    "action": "pod-kill",
+    "params": [
+      { "key": "gracePeriod", "label": "优雅终止时间(s)", "type": "text", "default": "0", "placeholder": "秒数" }
+    ]
+  },
+  "stress_cpu": {
+    "label": "CPU 压力",
+    "group": "压力故障",
+    "templateType": "StressChaos",
+    "action": null,
+    "params": [
+      { "key": "workers", "label": "Workers", "type": "text", "default": "1", "placeholder": "并发数" },
+      { "key": "load", "label": "负载(%)", "type": "text", "default": "80", "placeholder": "0-100" }
+    ]
+  },
+  "stress_mem": {
+    "label": "内存压力",
+    "group": "压力故障",
+    "templateType": "StressChaos",
+    "action": null,
+    "params": [
+      { "key": "workers", "label": "Workers", "type": "text", "default": "1", "placeholder": "并发数" },
+      { "key": "size", "label": "内存大小", "type": "text", "default": "256MB", "placeholder": "如 256MB" }
+    ]
+  },
+  "dns_error": {
+    "label": "DNS 错误",
+    "group": "其他",
+    "templateType": "DNSChaos",
+    "action": "error",
+    "params": [
+      { "key": "patterns", "label": "DNS 匹配模式", "type": "text", "default": "", "placeholder": "逗号分隔" }
+    ]
+  },
+  "node_cpu": {
+    "label": "节点 CPU 压力",
+    "group": "其他",
+    "templateType": "PhysicalMachineChaos",
+    "action": "stress-cpu",
+    "params": [
+      { "key": "workers", "label": "Workers", "type": "text", "default": "1", "placeholder": "并发数" },
+      { "key": "load", "label": "负载(%)", "type": "text", "default": "80", "placeholder": "0-100" },
+      { "key": "address", "label": "物理机地址", "type": "text", "default": "", "placeholder": "如 http://10.0.0.1:9090" }
+    ]
+  },
+  "node_mem": {
+    "label": "节点内存压力",
+    "group": "其他",
+    "templateType": "PhysicalMachineChaos",
+    "action": "stress-mem",
+    "params": [
+      { "key": "size", "label": "内存大小", "type": "text", "default": "256MB", "placeholder": "如 256MB" },
+      { "key": "address", "label": "物理机地址", "type": "text", "default": "", "placeholder": "如 http://10.0.0.1:9090" }
+    ]
+  }
+}

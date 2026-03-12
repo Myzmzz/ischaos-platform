@@ -55,9 +55,27 @@
         display: flex; align-items: center; justify-content: center;
     }
     .modal-card {
-        background: #fff; border-radius: 12px; width: 420px; max-height: 80vh;
+        background: #fff; border-radius: 12px; width: 480px; max-height: 85vh;
         box-shadow: 0 4px 16px rgba(0,0,0,0.08); overflow-y: auto;
     }
+    .form-label {
+        display: block; font-size: 12px; font-weight: 600; color: #475569;
+        margin-bottom: 4px;
+    }
+    .form-input {
+        width: 100%; padding: 7px 10px; font-size: 13px;
+        border: 1px solid #e2e8f0; border-radius: 8px; outline: none;
+        transition: border-color 0.15s;
+    }
+    .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.1); }
+    .form-select {
+        width: 100%; padding: 7px 10px; font-size: 13px;
+        border: 1px solid #e2e8f0; border-radius: 8px; outline: none;
+        background: #fff; cursor: pointer;
+    }
+    .form-select:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.1); }
+    .param-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .param-grid.single { grid-template-columns: 1fr; }
 </style>
 {% endblock %}
 
@@ -146,22 +164,95 @@
         </div>
     </div>
 
-    <!-- 故障配置弹窗（占位，Step 3 完善） -->
-    <div v-if="modalVisible" class="modal-overlay" @click.self="modalVisible = false">
+    <!-- 故障配置弹窗 -->
+    <div v-if="modalVisible" class="modal-overlay" @click.self="closeModal">
         <div class="modal-card">
+            <!-- 标题栏 -->
             <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
                 <h3 class="text-sm font-semibold text-gray-800">故障配置 — [[ modalService ]]</h3>
-                <button @click="modalVisible = false" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+                <button @click="closeModal" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
             </div>
-            <div class="px-5 py-6 text-center text-gray-400 text-sm">
-                <p>故障类型选择与参数配置</p>
-                <p class="mt-1 text-xs">（将在 Step 3 演练计划模块中完善）</p>
+
+            <!-- 成功提示 -->
+            <div v-if="submitSuccess" class="px-5 py-8 text-center">
+                <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 mb-3">
+                    <svg width="24" height="24" fill="none" stroke="#22c55e" stroke-width="2.5" viewBox="0 0 24 24">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                </div>
+                <p class="text-sm font-semibold text-gray-800">计划创建成功</p>
+                <p class="text-xs text-gray-400 mt-1">计划 ID: [[ createdPlanId ]]，状态: ready</p>
             </div>
-            <div class="px-5 py-3 border-t border-gray-200 flex justify-end gap-2">
-                <button @click="modalVisible = false"
+
+            <!-- 表单 -->
+            <div v-else class="px-5 py-4 space-y-4">
+                <!-- 计划名称 -->
+                <div>
+                    <label class="form-label">计划名称</label>
+                    <input v-model="faultForm.name" class="form-input" placeholder="输入计划名称" />
+                </div>
+
+                <!-- 故障类型 -->
+                <div>
+                    <label class="form-label">故障类型</label>
+                    <select v-model="faultForm.fault_type" @change="onFaultTypeChange" class="form-select">
+                        <optgroup label="网络故障">
+                            <option value="network_delay">网络延迟 (network_delay)</option>
+                            <option value="network_loss">网络丢包 (network_loss)</option>
+                            <option value="network_partition">网络隔离 (network_partition)</option>
+                        </optgroup>
+                        <optgroup label="Pod 故障">
+                            <option value="pod_failure">Pod 故障 (pod_failure)</option>
+                            <option value="pod_kill">Pod 终止 (pod_kill)</option>
+                        </optgroup>
+                        <optgroup label="压力故障">
+                            <option value="stress_cpu">CPU 压力 (stress_cpu)</option>
+                            <option value="stress_mem">内存压力 (stress_mem)</option>
+                        </optgroup>
+                        <optgroup label="其他">
+                            <option value="dns_error">DNS 错误 (dns_error)</option>
+                            <option value="node_cpu">节点 CPU 压力 (node_cpu)</option>
+                            <option value="node_mem">节点内存压力 (node_mem)</option>
+                        </optgroup>
+                    </select>
+                </div>
+
+                <!-- 动态参数区 -->
+                <div v-if="currentFaultParams.length > 0">
+                    <label class="form-label">故障参数</label>
+                    <div class="param-grid" :class="{ single: currentFaultParams.length === 1 }">
+                        <div v-for="p in currentFaultParams" :key="p.key">
+                            <label class="text-xs text-gray-400 mb-1 block">[[ p.label ]]</label>
+                            <select v-if="p.options" v-model="faultForm.params[p.key]" class="form-select">
+                                <option v-for="opt in p.options" :key="opt" :value="opt">[[ opt ]]</option>
+                            </select>
+                            <input v-else v-model="faultForm.params[p.key]"
+                                   class="form-input" :placeholder="p.placeholder || p.default" />
+                        </div>
+                    </div>
+                </div>
+                <div v-else class="text-xs text-gray-400 italic">该故障类型无额外参数</div>
+
+                <!-- 持续时间 -->
+                <div>
+                    <label class="form-label">持续时间</label>
+                    <input v-model="faultForm.duration" class="form-input" placeholder="如 30s, 1m, 5m" />
+                </div>
+
+                <!-- 错误提示 -->
+                <div v-if="submitError" class="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">
+                    [[ submitError ]]
+                </div>
+            </div>
+
+            <!-- 底部按钮 -->
+            <div v-if="!submitSuccess" class="px-5 py-3 border-t border-gray-200 flex justify-end gap-2">
+                <button @click="closeModal"
                         class="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50">取消</button>
-                <button class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 opacity-50 cursor-not-allowed"
-                        disabled>确认配置</button>
+                <button @click="submitFaultConfig" :disabled="submitting"
+                        class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                    [[ submitting ? '提交中...' : '创建计划' ]]
+                </button>
             </div>
         </div>
     </div>
@@ -177,6 +268,60 @@
  */
 const INTERFACE_ID = {{ interface_id }};
 
+/* 故障类型参数定义 */
+const FAULT_TYPE_LABELS = {
+    network_delay: '网络延迟', network_loss: '网络丢包', network_partition: '网络隔离',
+    pod_failure: 'Pod 故障', pod_kill: 'Pod 终止',
+    stress_cpu: 'CPU 压力', stress_mem: '内存压力',
+    dns_error: 'DNS 错误', node_cpu: '节点CPU压力', node_mem: '节点内存压力',
+};
+
+const FAULT_PARAMS_DEF = {
+    network_delay: [
+        { key: 'latency', label: '延迟', default: '200ms', placeholder: '如 200ms' },
+        { key: 'jitter', label: '抖动', default: '0ms', placeholder: '如 50ms' },
+        { key: 'correlation', label: '相关性(%)', default: '0', placeholder: '0-100' },
+    ],
+    network_loss: [
+        { key: 'loss', label: '丢包率(%)', default: '50', placeholder: '0-100' },
+        { key: 'correlation', label: '相关性(%)', default: '0', placeholder: '0-100' },
+    ],
+    network_partition: [
+        { key: 'direction', label: '方向', default: 'both', options: ['both', 'to', 'from'] },
+    ],
+    pod_failure: [],
+    pod_kill: [
+        { key: 'gracePeriod', label: '优雅终止时间(s)', default: '0', placeholder: '秒数' },
+    ],
+    stress_cpu: [
+        { key: 'workers', label: 'Workers', default: '1', placeholder: '并发数' },
+        { key: 'load', label: '负载(%)', default: '80', placeholder: '0-100' },
+    ],
+    stress_mem: [
+        { key: 'workers', label: 'Workers', default: '1', placeholder: '并发数' },
+        { key: 'size', label: '内存大小', default: '256MB', placeholder: '如 256MB' },
+    ],
+    dns_error: [
+        { key: 'patterns', label: 'DNS 匹配模式', default: '', placeholder: '逗号分隔，如 google.com,example.com' },
+    ],
+    node_cpu: [
+        { key: 'workers', label: 'Workers', default: '1', placeholder: '并发数' },
+        { key: 'load', label: '负载(%)', default: '80', placeholder: '0-100' },
+        { key: 'address', label: '物理机地址', default: '', placeholder: '如 http://10.0.0.1:9090' },
+    ],
+    node_mem: [
+        { key: 'size', label: '内存大小', default: '256MB', placeholder: '如 256MB' },
+        { key: 'address', label: '物理机地址', default: '', placeholder: '如 http://10.0.0.1:9090' },
+    ],
+};
+
+function buildDefaultParams(faultType) {
+    const defs = FAULT_PARAMS_DEF[faultType] || [];
+    const params = {};
+    for (const p of defs) params[p.key] = p.default;
+    return params;
+}
+
 function bootApp() {
     const { createApp } = Vue;
 
@@ -190,6 +335,17 @@ function bootApp() {
                 graph: null,
                 modalVisible: false,
                 modalService: '',
+                /* 故障配置表单 */
+                faultForm: {
+                    name: '',
+                    fault_type: 'network_delay',
+                    duration: '30s',
+                    params: buildDefaultParams('network_delay'),
+                },
+                submitting: false,
+                submitError: '',
+                submitSuccess: false,
+                createdPlanId: null,
             };
         },
         computed: {
@@ -203,6 +359,9 @@ function bootApp() {
             },
             edgeCount() {
                 return this.iface ? this.iface.topology.edges.length : 0;
+            },
+            currentFaultParams() {
+                return FAULT_PARAMS_DEF[this.faultForm.fault_type] || [];
             },
         },
         mounted() {
@@ -229,8 +388,7 @@ function bootApp() {
                             {
                                 faultServices: new Set(),
                                 onNodeClick: (nodeId) => {
-                                    this.modalService = nodeId;
-                                    this.modalVisible = true;
+                                    this.openFaultModal(nodeId);
                                 },
                             },
                         );
@@ -253,6 +411,60 @@ function bootApp() {
             zoomIn()  { if (this.graph) this.graph.zoom(0.2); },
             zoomOut() { if (this.graph) this.graph.zoom(-0.2); },
             fitView() { if (this.graph) this.graph.zoomToFit({ padding: 50, maxScale: 1.2 }); },
+
+            /* ── 故障配置弹窗 ── */
+            openFaultModal(serviceId) {
+                this.modalService = serviceId;
+                this.submitError = '';
+                this.submitSuccess = false;
+                this.createdPlanId = null;
+                this.faultForm.fault_type = 'network_delay';
+                this.faultForm.duration = '30s';
+                this.faultForm.params = buildDefaultParams('network_delay');
+                this.faultForm.name = `${serviceId} ${FAULT_TYPE_LABELS['network_delay']}`;
+                this.modalVisible = true;
+            },
+            closeModal() {
+                this.modalVisible = false;
+            },
+            onFaultTypeChange() {
+                const ft = this.faultForm.fault_type;
+                this.faultForm.params = buildDefaultParams(ft);
+                this.faultForm.name = `${this.modalService} ${FAULT_TYPE_LABELS[ft] || ft}`;
+                this.submitError = '';
+            },
+            async submitFaultConfig() {
+                this.submitting = true;
+                this.submitError = '';
+                try {
+                    const body = {
+                        name: this.faultForm.name,
+                        interface_id: INTERFACE_ID,
+                        fault_type: this.faultForm.fault_type,
+                        target_service: this.modalService,
+                        fault_params: { ...this.faultForm.params },
+                        duration: this.faultForm.duration,
+                        status: 'ready',
+                    };
+                    const resp = await fetch('/api/plans', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body),
+                    });
+                    const json = await resp.json();
+                    if (json.code !== 200) {
+                        this.submitError = json.message || '创建失败';
+                        return;
+                    }
+                    this.createdPlanId = json.data.id;
+                    this.submitSuccess = true;
+                    setTimeout(() => { this.closeModal(); }, 2000);
+                } catch (e) {
+                    this.submitError = '网络请求失败: ' + e.message;
+                } finally {
+                    this.submitting = false;
+                }
+            },
         },
     }).mount('#app');
 }
