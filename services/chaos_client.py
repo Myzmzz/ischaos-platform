@@ -69,7 +69,7 @@ def get_workflow_status(
 
     Args:
         workflow_name: Workflow 名称
-        namespace: 命名空间，默认使用 Config.TARGET_NAMESPACE
+        namespace: 命名空间，默认 chaos-mesh
 
     Returns:
         Workflow 状态摘要 JSON
@@ -78,7 +78,7 @@ def get_workflow_status(
         ChaosClientError: API 调用失败
     """
     if namespace is None:
-        namespace = Config.TARGET_NAMESPACE
+        namespace = "chaos-mesh"
 
     url = f"{_base_url()}/real_time/workflow/{workflow_name}/summary"
     params = {"namespace": namespace}

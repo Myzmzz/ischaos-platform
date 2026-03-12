@@ -1,7 +1,10 @@
 """故障类型 → Chaos Mesh Workflow JSON 构建器。
 
-根据演练计划信息生成符合 Chaos Mesh Workflow API 规范的 JSON 结构。
-支持 10 种故障类型，每种类型映射到对应的 templateType 和参数。
+根据演练计划信息生成符合 Chaos Mesh Dashboard API 规范的 Workflow JSON。
+使用 FaultConfig templateType + list (Inject → Wait → Recover) 结构，
+而非直接使用 K8s CRD 格式。
+
+支持 10 种故障类型，每种类型映射到对应的 chaosType 和参数。
 """
 
 import json
@@ -11,7 +14,7 @@ from typing import Any, Dict, Optional, Tuple
 from config import Config
 
 
-# 故障类型 → (templateType, action) 映射
+# 故障类型 → (chaosType, action) 映射
 FAULT_TYPE_MAP: Dict[str, Tuple[str, Optional[str]]] = {
     "network_loss":      ("NetworkChaos", "loss"),
     "network_delay":     ("NetworkChaos", "delay"),
@@ -26,16 +29,17 @@ FAULT_TYPE_MAP: Dict[str, Tuple[str, Optional[str]]] = {
 }
 
 
-def build_workflow(plan: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+def build_workflow(plan: dict) -> Tuple[str, dict]:
     """根据演练计划构建 Chaos Mesh Workflow JSON。
 
+    生成的 Workflow 使用 Dashboard API 的 FaultConfig 格式：
+    - Inject: 注入故障
+    - Wait:   等待指定时间（即故障持续时间）
+    - Recover: 恢复故障
+
     Args:
-        plan: 演练计划字典，需包含以下字段：
-            - id: 计划 ID
-            - fault_type: 故障类型（如 network_delay）
-            - target_service: 目标服务名（如 ts-ui-dashboard）
-            - fault_params: 故障参数 JSON 字符串或字典
-            - duration: 持续时间（如 30s）
+        plan: 演练计划字典，需包含 id, fault_type, target_service,
+              fault_params, duration 等字段
 
     Returns:
         (workflow_name, workflow_json) 元组
@@ -60,34 +64,49 @@ def build_workflow(plan: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     timestamp = int(time.time())
     workflow_name = f"ischaos-{plan['id']}-{timestamp}"
 
-    template_type, action = FAULT_TYPE_MAP[fault_type]
+    chaos_type, action = FAULT_TYPE_MAP[fault_type]
 
-    # 构建模板内容
-    template_spec = _build_template_spec(
+    # 构建 chaos spec（Inject 内容）
+    chaos_spec = _build_chaos_spec(
         fault_type=fault_type,
-        template_type=template_type,
+        chaos_type=chaos_type,
         action=action,
         target_service=target_service,
         namespace=namespace,
         fault_params=fault_params,
     )
 
-    # 组装 Workflow JSON
-    workflow_json: dict[str, Any] = {
+    # 组装 Workflow JSON — FaultConfig 格式
+    # deadline 设为 duration 的 2 倍，给 Recover 留时间
+    workflow_json: Dict[str, Any] = {
         "apiVersion": "chaos-mesh.org/v1alpha1",
         "kind": "Workflow",
         "metadata": {
             "name": workflow_name,
-            "namespace": namespace,
+            "namespace": "chaos-mesh",
         },
         "spec": {
-            "entry": "entry",
+            "entry": workflow_name,
             "templates": [
                 {
-                    "name": "entry",
-                    "templateType": template_type,
-                    "deadline": duration,
-                    **template_spec,
+                    "name": workflow_name,
+                    "templateType": "FaultConfig",
+                    "deadline": _double_duration(duration),
+                    "list": [
+                        {
+                            "type": "Inject",
+                            "chaosType": chaos_type,
+                            chaos_type[0].lower() + chaos_type[1:]: chaos_spec,
+                        },
+                        {
+                            "type": "Wait",
+                            "deadline": duration,
+                        },
+                        {
+                            "type": "Recover",
+                            "index": 0,
+                        },
+                    ],
                 }
             ],
         },
@@ -96,115 +115,121 @@ def build_workflow(plan: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     return workflow_name, workflow_json
 
 
-def _build_template_spec(
+def _double_duration(duration: str) -> str:
+    """将时间字符串翻倍，给 workflow deadline 留余量。
+
+    支持 's'(秒) 和 'm'(分钟) 后缀。
+    """
+    try:
+        if duration.endswith("s"):
+            val = int(duration[:-1])
+            return f"{val * 2}s"
+        elif duration.endswith("m"):
+            val = int(duration[:-1])
+            return f"{val * 2}m"
+        elif duration.endswith("h"):
+            val = int(duration[:-1])
+            return f"{val * 2}h"
+        else:
+            # 默认当秒处理
+            val = int(duration)
+            return f"{val * 2}s"
+    except (ValueError, IndexError):
+        return "120s"
+
+
+def _build_chaos_spec(
     fault_type: str,
-    template_type: str,
+    chaos_type: str,
     action: Optional[str],
     target_service: str,
     namespace: str,
     fault_params: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """根据故障类型构建模板内部的 spec 字段。
+    """根据故障类型构建 chaos spec（嵌入在 Inject 中的内容）。
 
-    Args:
-        fault_type: 故障类型标识
-        template_type: Chaos Mesh 模板类型
-        action: Chaos Mesh action 字段
-        target_service: 目标服务名
-        namespace: 目标命名空间
-        fault_params: 故障参数字典
-
-    Returns:
-        模板 spec 字典，作为 template 的一部分合并
+    返回的字典直接作为 list[0] 中 chaosType 对应键的值。
     """
-    # 通用的 Pod selector（K8s 级故障使用）
+    # 通用的 Pod selector
     selector = {
         "namespaces": [namespace],
         "labelSelectors": {"app": target_service},
     }
 
-    if template_type == "NetworkChaos":
+    if chaos_type == "NetworkChaos":
         return _build_network_chaos(action, selector, fault_params)
-    elif template_type == "PodChaos":
+    elif chaos_type == "PodChaos":
         return _build_pod_chaos(action, selector, fault_params)
-    elif template_type == "StressChaos":
+    elif chaos_type == "StressChaos":
         return _build_stress_chaos(fault_type, selector, fault_params)
-    elif template_type == "DNSChaos":
+    elif chaos_type == "DNSChaos":
         return _build_dns_chaos(selector, fault_params)
-    elif template_type == "PhysicalMachineChaos":
+    elif chaos_type == "PhysicalMachineChaos":
         return _build_physical_machine_chaos(action, fault_params)
     else:
-        raise ValueError(f"未知的模板类型: {template_type}")
+        raise ValueError(f"未知的 chaosType: {chaos_type}")
 
 
 def _build_network_chaos(
     action: str, selector: dict, params: dict
-) -> dict[str, Any]:
-    """构建 NetworkChaos 模板。"""
-    spec: dict[str, Any] = {
-        "networkChaos": {
-            "action": action,
-            "direction": params.get("direction", "to"),
-            "mode": "all",
-            "selector": selector,
-        }
+) -> Dict[str, Any]:
+    """构建 NetworkChaos spec。"""
+    spec: Dict[str, Any] = {
+        "action": action,
+        "direction": params.get("direction", "to"),
+        "mode": "all",
+        "selector": selector,
     }
-    chaos = spec["networkChaos"]
 
     if action == "delay":
-        chaos["delay"] = {
+        spec["delay"] = {
             "latency": params.get("latency", "200ms"),
             "jitter": params.get("jitter", "0ms"),
             "correlation": params.get("correlation", "0"),
         }
     elif action == "loss":
-        chaos["loss"] = {
+        spec["loss"] = {
             "loss": params.get("loss", "50"),
             "correlation": params.get("correlation", "0"),
         }
     elif action == "partition":
-        chaos["direction"] = params.get("direction", "both")
+        spec["direction"] = params.get("direction", "both")
 
     return spec
 
 
 def _build_pod_chaos(
     action: str, selector: dict, params: dict
-) -> dict[str, Any]:
-    """构建 PodChaos 模板。"""
-    spec: dict[str, Any] = {
-        "podChaos": {
-            "action": action,
-            "mode": "all",
-            "selector": selector,
-        }
+) -> Dict[str, Any]:
+    """构建 PodChaos spec。"""
+    spec: Dict[str, Any] = {
+        "action": action,
+        "mode": "all",
+        "selector": selector,
     }
     if action == "pod-kill" and "gracePeriod" in params:
-        spec["podChaos"]["gracePeriod"] = int(params["gracePeriod"])
+        spec["gracePeriod"] = int(params["gracePeriod"])
 
     return spec
 
 
 def _build_stress_chaos(
     fault_type: str, selector: dict, params: dict
-) -> dict[str, Any]:
-    """构建 StressChaos 模板。"""
-    spec: dict[str, Any] = {
-        "stressChaos": {
-            "mode": "all",
-            "selector": selector,
-            "stressors": {},
-        }
+) -> Dict[str, Any]:
+    """构建 StressChaos spec。"""
+    spec: Dict[str, Any] = {
+        "mode": "all",
+        "selector": selector,
+        "stressors": {},
     }
-    stressors = spec["stressChaos"]["stressors"]
 
     if fault_type == "stress_cpu":
-        stressors["cpu"] = {
+        spec["stressors"]["cpu"] = {
             "workers": int(params.get("workers", 1)),
             "load": int(params.get("load", 80)),
         }
     elif fault_type == "stress_mem":
-        stressors["memory"] = {
+        spec["stressors"]["memory"] = {
             "workers": int(params.get("workers", 1)),
             "size": params.get("size", "256MB"),
         }
@@ -214,43 +239,38 @@ def _build_stress_chaos(
 
 def _build_dns_chaos(
     selector: dict, params: dict
-) -> dict[str, Any]:
-    """构建 DNSChaos 模板。"""
-    spec: dict[str, Any] = {
-        "dnsChaos": {
-            "action": "error",
-            "mode": "all",
-            "selector": selector,
-        }
+) -> Dict[str, Any]:
+    """构建 DNSChaos spec。"""
+    spec: Dict[str, Any] = {
+        "action": "error",
+        "mode": "all",
+        "selector": selector,
     }
     if "patterns" in params:
         patterns = params["patterns"]
         if isinstance(patterns, str):
-            patterns = [p.strip() for p in patterns.split(",")]
-        spec["dnsChaos"]["patterns"] = patterns
+            patterns = [p.strip() for p in patterns.split(",") if p.strip()]
+        spec["patterns"] = patterns
 
     return spec
 
 
 def _build_physical_machine_chaos(
     action: str, params: dict
-) -> dict[str, Any]:
-    """构建 PhysicalMachineChaos 模板（物理机级别故障）。"""
-    spec: dict[str, Any] = {
-        "physicalmachineChaos": {
-            "action": action,
-            "address": [params.get("address", "")],
-        }
+) -> Dict[str, Any]:
+    """构建 PhysicalMachineChaos spec（物理机级别故障）。"""
+    spec: Dict[str, Any] = {
+        "action": action,
+        "address": [params.get("address", "")],
     }
-    chaos = spec["physicalmachineChaos"]
 
     if action == "stress-cpu":
-        chaos["stress-cpu"] = {
+        spec["stress-cpu"] = {
             "workers": int(params.get("workers", 1)),
             "load": int(params.get("load", 80)),
         }
     elif action == "stress-mem":
-        chaos["stress-mem"] = {
+        spec["stress-mem"] = {
             "size": params.get("size", "256MB"),
         }
 
