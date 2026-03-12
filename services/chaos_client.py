@@ -45,8 +45,11 @@ def create_workflow(workflow_json: dict[str, Any]) -> dict[str, Any]:
     url = f"{_base_url()}/real_time/workflow"
     logger.info("创建 Workflow: POST %s", url)
 
+    # Dashboard API 要求请求体包裹在 {"workflow": ..., "k6": {}} 中
+    payload = {"workflow": workflow_json, "k6": {}}
+
     try:
-        resp = requests.post(url, json=workflow_json, timeout=REQUEST_TIMEOUT)
+        resp = requests.post(url, json=payload, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
     except requests.exceptions.Timeout:
