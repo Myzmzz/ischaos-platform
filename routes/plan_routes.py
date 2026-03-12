@@ -92,6 +92,28 @@ def delete_plan(plan_id: int):
     return jsonify({"code": 200, "message": "success", "data": None})
 
 
+@plan_bp.route("/plans/<int:plan_id>/workflow", methods=["GET"])
+def preview_workflow(plan_id: int):
+    """预览计划对应的 Chaos Mesh Workflow JSON（不实际提交）。"""
+    plan = plan_model.get_by_id(plan_id)
+    if plan is None:
+        return jsonify({"code": 404, "message": "计划不存在", "data": None}), 404
+
+    try:
+        workflow_name, workflow_json = build_workflow(plan)
+    except ValueError as e:
+        return jsonify({"code": 400, "message": str(e), "data": None}), 400
+
+    return jsonify({
+        "code": 200,
+        "message": "success",
+        "data": {
+            "workflow_name": workflow_name,
+            "workflow_json": workflow_json,
+        },
+    })
+
+
 # ── 执行触发 ─────────────────────────────────────────────────
 
 

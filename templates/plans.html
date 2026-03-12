@@ -13,7 +13,7 @@
     .fault-stress    { background: #fefce8; color: #ca8a04; }
     .fault-other     { background: #f5f3ff; color: #7c3aed; }
 
-    /* 删除确认弹窗 */
+    /* 弹窗通用 */
     .confirm-overlay {
         position: fixed; inset: 0; z-index: 50;
         background: rgba(0,0,0,0.3); backdrop-filter: blur(2px);
@@ -23,6 +23,22 @@
         background: #fff; border-radius: 12px; width: 360px; padding: 24px;
         box-shadow: 0 4px 16px rgba(0,0,0,0.08);
     }
+    /* Workflow JSON 预览弹窗 */
+    .json-modal {
+        background: #fff; border-radius: 12px; width: 680px; max-height: 85vh;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12); display: flex; flex-direction: column;
+    }
+    .json-pre {
+        background: #1e293b; color: #e2e8f0; border-radius: 8px;
+        padding: 16px; font-size: 12px; line-height: 1.6;
+        overflow: auto; max-height: 60vh; margin: 0;
+        font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+    .json-pre .key   { color: #7dd3fc; }
+    .json-pre .str   { color: #86efac; }
+    .json-pre .num   { color: #fde68a; }
+    .json-pre .bool  { color: #c4b5fd; }
+    .json-pre .null  { color: #94a3b8; }
 </style>
 {% endblock %}
 
@@ -87,6 +103,10 @@
                         <td class="px-4 py-3 text-center text-xs text-gray-400">[[ plan.created_at ]]</td>
                         <td class="px-4 py-3 text-center">
                             <div class="flex items-center justify-center gap-1">
+                                <button @click="showWorkflow(plan)"
+                                        class="px-2 py-1 text-xs border border-gray-300 text-gray-500 rounded hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300">
+                                    Workflow
+                                </button>
                                 <button v-if="plan.status === 'ready'"
                                         @click="executePlan(plan)"
                                         class="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
@@ -108,6 +128,31 @@
         <div v-if="execMessage" class="mt-4 text-sm px-4 py-3 rounded-lg"
              :class="execError ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'">
             [[ execMessage ]]
+        </div>
+    </div>
+
+    <!-- Workflow JSON 预览弹窗 -->
+    <div v-if="workflowModal" class="confirm-overlay" @click.self="workflowModal = null">
+        <div class="json-modal">
+            <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-800">Workflow JSON</h3>
+                    <p class="text-xs text-gray-400 mt-0.5 font-mono">[[ workflowModal.name ]]</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button @click="copyWorkflow"
+                            class="px-2.5 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-1">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        [[ copied ? '已复制' : '复制' ]]
+                    </button>
+                    <button @click="workflowModal = null" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+                </div>
+            </div>
+            <div class="p-4 overflow-auto">
+                <pre class="json-pre" v-html="workflowModal.highlighted"></pre>
+            </div>
         </div>
     </div>
 
@@ -150,6 +195,8 @@ createApp({
             executing: null,
             execMessage: '',
             execError: false,
+            workflowModal: null,  // { name, json, highlighted }
+            copied: false,
         };
     },
     mounted() {
@@ -203,6 +250,43 @@ createApp({
             } catch (e) {
                 // 静默处理
             }
+        },
+
+        async showWorkflow(plan) {
+            try {
+                const resp = await fetch(`/api/plans/${plan.id}/workflow`);
+                const json = await resp.json();
+                if (json.code === 200) {
+                    const raw = JSON.stringify(json.data.workflow_json, null, 2);
+                    this.workflowModal = {
+                        name: json.data.workflow_name,
+                        json: raw,
+                        highlighted: this.highlightJson(raw),
+                    };
+                    this.copied = false;
+                }
+            } catch (e) {
+                // 静默处理
+            }
+        },
+
+        highlightJson(str) {
+            // 简易 JSON 语法高亮
+            return str
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"([^"]+)"(\s*:)/g, '<span class="key">"$1"</span>$2')
+                .replace(/:\s*"([^"]*)"/g, ': <span class="str">"$1"</span>')
+                .replace(/:\s*(\d+)/g, ': <span class="num">$1</span>')
+                .replace(/:\s*(true|false)/g, ': <span class="bool">$1</span>')
+                .replace(/:\s*(null)/g, ': <span class="null">$1</span>');
+        },
+
+        copyWorkflow() {
+            if (!this.workflowModal) return;
+            navigator.clipboard.writeText(this.workflowModal.json).then(() => {
+                this.copied = true;
+                setTimeout(() => { this.copied = false; }, 2000);
+            });
         },
 
         async executePlan(plan) {
