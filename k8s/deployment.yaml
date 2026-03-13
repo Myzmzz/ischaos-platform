@@ -18,7 +18,7 @@ spec:
       serviceAccountName: ischaos-sa
       containers:
         - name: ischaos-platform
-          image: 1.94.151.57:85/ischaos/ischaos-platform:20260312173744
+          image: 1.94.151.57:85/ischaos/ischaos-platform:20260312174538
           ports:
             - containerPort: 5000
           env:
@@ -39,4 +39,5 @@ spec:
               mountPath: /app/data
       volumes:
         - name: data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: ischaos-data
