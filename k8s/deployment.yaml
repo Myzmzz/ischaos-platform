@@ -18,20 +18,20 @@ spec:
       serviceAccountName: ischaos-sa
       containers:
         - name: ischaos-platform
-          image: 1.94.151.57:85/ischaos/ischaos-platform:20260312174538
+          image: 1.94.151.57:85/ischaos/ischaos-platform:20260316141333
           ports:
             - containerPort: 5000
           env:
             - name: CHAOS_MESH_URL
               value: "http://116.63.51.45:30854"
             - name: COROOT_URL
-              value: "http://116.63.51.45:30800"
+              value: "http://coroot-coroot.coroot:8080"
             - name: COROOT_USERNAME
               value: "admin"
             - name: COROOT_PASSWORD
               value: "123456"
             - name: COROOT_PROJECT_ID
-              value: "jtcsxpmc"
+              value: "60hjkbo3"
             - name: DATABASE_PATH
               value: "/app/data/ischaos.db"
           volumeMounts:

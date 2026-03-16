@@ -53,7 +53,7 @@ class CorootClient:
 
     def login(self) -> None:
         """通过用户名密码登录 Coroot，获取会话 Cookie。"""
-        url = f"{self.base_url}/api/login"
+        url = f"{self.base_url}/api/v1/login"
         payload = {"email": self.username, "password": self.password}
 
         logger.debug(

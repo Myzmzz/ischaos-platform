@@ -10,6 +10,7 @@ import logging
 
 from flask import Blueprint, jsonify, request
 
+from config import Config
 from services import observability
 
 logger = logging.getLogger(__name__)
@@ -48,15 +49,25 @@ def get_metrics():
         start_time: 起始时间戳（毫秒）
         end_time: 结束时间戳（毫秒）
         metric_names: 逗号分隔的指标名（如 "cpu_usage,memory_usage"）
-        app_id: 指定应用 ID（可选，默认 ts-travel-service）
+        service_name: 服务名（如 "ts-travel-service"，自动构建 Coroot app_id）
+        app_id: 完整 Coroot 应用 ID（兼容旧参数，优先级低于 service_name）
         interval: 采样间隔（秒，可选）
     """
     try:
+        # 支持 service_name 参数，自动构建完整 Coroot app_id
+        app_id = request.args.get("app_id")
+        service_name = request.args.get("service_name")
+        if service_name:
+            app_id = (
+                f"{Config.COROOT_PROJECT_ID}:{Config.TARGET_NAMESPACE}"
+                f":Deployment:{service_name}"
+            )
+
         data = observability.get_metrics(
             start_time=request.args.get("start_time", type=int),
             end_time=request.args.get("end_time", type=int),
             metric_names=request.args.get("metric_names"),
-            app_id=request.args.get("app_id"),
+            app_id=app_id,
             interval=request.args.get("interval", type=int),
         )
         return jsonify({"code": 200, "message": "success", "data": data})

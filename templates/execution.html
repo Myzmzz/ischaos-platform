@@ -271,9 +271,9 @@
                                class="param-input w-56" placeholder="如 cpu_usage,memory_usage">
                     </div>
                     <div v-if="collectActiveTab === 'metrics'">
-                        <label class="param-label block mb-1">App ID</label>
-                        <input v-model="collectParams.app_id" type="text"
-                               class="param-input w-56" placeholder="留空=默认服务">
+                        <label class="param-label block mb-1">服务名</label>
+                        <input v-model="collectParams.service_name" type="text"
+                               class="param-input w-56" placeholder="如 ts-travel-service">
                     </div>
                     <!-- logs 额外参数 -->
                     <div v-if="collectActiveTab === 'logs'">
@@ -651,7 +651,7 @@ createApp({
                 trace_id: '',
                 limit: 1000,
                 metric_names: '',
-                app_id: '',
+                service_name: '',
                 anomalous_only: 'false',
                 log_limit: 500,
                 entity_type: '',
@@ -910,7 +910,7 @@ createApp({
             } else if (tab === 'metrics') {
                 url = '/api/v1/metrics';
                 if (p.metric_names) params.set('metric_names', p.metric_names);
-                if (p.app_id) params.set('app_id', p.app_id);
+                if (p.service_name) params.set('service_name', p.service_name);
             } else if (tab === 'logs') {
                 url = '/api/v1/logs';
                 params.set('anomalous_only', p.anomalous_only);
@@ -988,10 +988,16 @@ createApp({
 
         /**
          * 使用 ECharts 渲染数据收集 tab 的指标图表。
+         * retries 参数用于处理嵌套 v-if 导致 $refs 延迟可用的情况。
          */
-        renderCollectMetricsChart() {
+        renderCollectMetricsChart(retries = 3) {
             const el = this.$refs.collectMetricsChart;
-            if (!el || !this.collectData || !this.collectData.metrics) return;
+            if (!el || !this.collectData || !this.collectData.metrics) {
+                if (retries > 0) {
+                    this.$nextTick(() => this.renderCollectMetricsChart(retries - 1));
+                }
+                return;
+            }
 
             if (this.collectMetricsChartInstance) {
                 this.collectMetricsChartInstance.dispose();
