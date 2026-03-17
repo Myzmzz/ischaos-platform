@@ -190,25 +190,12 @@ def get_execution_metrics(execution_id: int):
     # 自动计算时间范围：故障注入前 10 分钟 ~ 故障恢复后 10 分钟
     ten_min_ms = 10 * 60 * 1000
 
+    # fault_inject_at / fault_end_at 已经是毫秒时间戳
     if from_ts is None and execution.get("fault_inject_at"):
-        try:
-            inject_dt = datetime.fromisoformat(
-                execution["fault_inject_at"].replace("Z", "+00:00")
-            )
-            inject_ms = int(inject_dt.timestamp() * 1000)
-            from_ts = inject_ms - ten_min_ms
-        except (ValueError, AttributeError):
-            pass
+        from_ts = execution["fault_inject_at"] - ten_min_ms
 
     if to_ts is None and execution.get("fault_end_at"):
-        try:
-            end_dt = datetime.fromisoformat(
-                execution["fault_end_at"].replace("Z", "+00:00")
-            )
-            end_ms = int(end_dt.timestamp() * 1000)
-            to_ts = end_ms + ten_min_ms
-        except (ValueError, AttributeError):
-            pass
+        to_ts = execution["fault_end_at"] + ten_min_ms
 
     # 如果故障尚未恢复，to_ts 取当前时间
     if to_ts is None and from_ts is not None:

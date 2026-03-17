@@ -156,8 +156,9 @@ def _is_timed_out(
         return False
 
     try:
-        start_dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-    except (ValueError, AttributeError):
+        # started_at 为毫秒时间戳
+        start_dt = datetime.fromtimestamp(started_at / 1000, tz=timezone.utc)
+    except (ValueError, TypeError, OSError):
         return False
 
     duration_s = _parse_duration_seconds(plan.get("duration", "30s"))

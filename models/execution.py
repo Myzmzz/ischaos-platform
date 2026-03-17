@@ -1,25 +1,57 @@
 """演练执行记录表 CRUD 操作。"""
 
 import json
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from models.database import get_db
 
 
+def _to_timestamp_ms(time_str: Optional[str]) -> Optional[int]:
+    """将时间字符串转换为毫秒时间戳。
+
+    支持两种格式：
+    - ISO 8601 UTC: "2026-03-17T07:31:37Z"
+    - SQLite datetime: "2026-03-17 07:31:37"
+
+    Args:
+        time_str: 时间字符串，None 则返回 None
+
+    Returns:
+        毫秒时间戳，解析失败返回 None
+    """
+    if not time_str:
+        return None
+    try:
+        # ISO 8601 带 Z 后缀
+        if time_str.endswith("Z"):
+            dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+        elif "T" in time_str:
+            dt = datetime.fromisoformat(time_str)
+        else:
+            # SQLite datetime 格式 "YYYY-MM-DD HH:MM:SS"，视为 UTC
+            dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S").replace(
+                tzinfo=timezone.utc
+            )
+        return int(dt.timestamp() * 1000)
+    except (ValueError, AttributeError):
+        return None
+
+
 def _row_to_dict(row) -> dict[str, Any]:
-    """将数据库行转换为字典，解析 JSON 字段。"""
+    """将数据库行转换为字典，解析 JSON 字段，时间转为毫秒时间戳。"""
     return {
         "id": row["id"],
         "plan_id": row["plan_id"],
         "workflow_name": row["workflow_name"],
         "status": row["status"],
-        "started_at": row["started_at"],
-        "finished_at": row["finished_at"],
-        "fault_inject_at": row["fault_inject_at"],
-        "fault_end_at": row["fault_end_at"],
+        "started_at": _to_timestamp_ms(row["started_at"]),
+        "finished_at": _to_timestamp_ms(row["finished_at"]),
+        "fault_inject_at": _to_timestamp_ms(row["fault_inject_at"]),
+        "fault_end_at": _to_timestamp_ms(row["fault_end_at"]),
         "result_json": json.loads(row["result_json"]),
         "error_message": row["error_message"],
-        "created_at": row["created_at"],
+        "created_at": _to_timestamp_ms(row["created_at"]),
     }
 
 
