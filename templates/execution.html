@@ -147,7 +147,7 @@
                 </div>
                 <div>
                     <span class="text-gray-400">创建时间</span>
-                    <p class="text-gray-700 mt-0.5">[[ execution.created_at ]]</p>
+                    <p class="text-gray-700 mt-0.5">[[ formatDateTime(execution.created_at) ]]</p>
                 </div>
             </div>
 
@@ -266,14 +266,39 @@
                     </div>
                     <!-- metrics 额外参数 -->
                     <div v-if="collectActiveTab === 'metrics'">
-                        <label class="param-label block mb-1">指标名</label>
-                        <input v-model="collectParams.metric_names" type="text"
-                               class="param-input w-56" placeholder="如 cpu_usage,memory_usage">
+                        <label class="param-label block mb-1">指标范围</label>
+                        <div class="flex rounded-md overflow-hidden border border-gray-300" style="height:30px;">
+                            <button @click="collectParams.metrics_scope = 'service'"
+                                    :class="collectParams.metrics_scope === 'service'
+                                        ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                                    class="px-3 text-xs font-medium transition-colors" style="border:none;cursor:pointer;">
+                                服务指标
+                            </button>
+                            <button @click="collectParams.metrics_scope = 'node'"
+                                    :class="collectParams.metrics_scope === 'node'
+                                        ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                                    class="px-3 text-xs font-medium transition-colors border-l border-gray-300" style="cursor:pointer;">
+                                节点指标
+                            </button>
+                        </div>
                     </div>
                     <div v-if="collectActiveTab === 'metrics'">
+                        <label class="param-label block mb-1">指标名</label>
+                        <input v-model="collectParams.metric_names" type="text"
+                               class="param-input w-56"
+                               :placeholder="collectParams.metrics_scope === 'node'
+                                   ? '如 node_cpu_usage,node_memory_usage'
+                                   : '如 cpu_usage,memory_usage'">
+                    </div>
+                    <div v-if="collectActiveTab === 'metrics' && collectParams.metrics_scope === 'service'">
                         <label class="param-label block mb-1">服务名</label>
                         <input v-model="collectParams.service_name" type="text"
                                class="param-input w-56" placeholder="如 ts-travel-service">
+                    </div>
+                    <div v-if="collectActiveTab === 'metrics' && collectParams.metrics_scope === 'node'">
+                        <label class="param-label block mb-1">节点名</label>
+                        <input v-model="collectParams.node_name" type="text"
+                               class="param-input w-56" placeholder="如 tcse-v100-02">
                     </div>
                     <!-- logs 额外参数 -->
                     <div v-if="collectActiveTab === 'logs'">
@@ -386,7 +411,10 @@
                     <!-- ═══════ 指标结果 ═══════ -->
                     <div v-if="collectActiveTab === 'metrics'">
                         <div class="flex items-center justify-between mb-3">
-                            <p class="text-xs text-gray-500">服务: <span class="font-semibold text-gray-700">[[ collectData.service_name ]]</span></p>
+                            <p class="text-xs text-gray-500">
+                                <span v-if="collectData.node_name">节点: <span class="font-semibold text-gray-700">[[ collectData.node_name ]]</span></span>
+                                <span v-else>服务: <span class="font-semibold text-gray-700">[[ collectData.service_name ]]</span></span>
+                            </p>
                         </div>
                         <div v-if="collectData.metrics && collectData.metrics.length > 0">
                             <!-- 指标概览卡片 -->
@@ -556,13 +584,13 @@
                         <div><span class="text-gray-400">执行 ID：</span><span class="text-gray-700">[[ execution.id ]]</span></div>
                         <div><span class="text-gray-400">Workflow：</span><span class="text-gray-700 font-mono">[[ execution.workflow_name ]]</span></div>
                         <div><span class="text-gray-400">状态：</span><span class="text-gray-700">[[ statusLabel(execution.status) ]]</span></div>
-                        <div><span class="text-gray-400">创建时间：</span><span class="text-gray-700">[[ execution.created_at ]]</span></div>
+                        <div><span class="text-gray-400">创建时间：</span><span class="text-gray-700">[[ formatDateTime(execution.created_at) ]]</span></div>
                     </div>
                     <div class="space-y-3">
-                        <div><span class="text-gray-400">开始时间：</span><span class="text-gray-700">[[ execution.started_at || '-' ]]</span></div>
-                        <div><span class="text-gray-400">结束时间：</span><span class="text-gray-700">[[ execution.finished_at || '-' ]]</span></div>
-                        <div><span class="text-gray-400">故障注入：</span><span class="text-gray-700">[[ execution.fault_inject_at || '-' ]]</span></div>
-                        <div><span class="text-gray-400">故障恢复：</span><span class="text-gray-700">[[ execution.fault_end_at || '-' ]]</span></div>
+                        <div><span class="text-gray-400">开始时间：</span><span class="text-gray-700">[[ formatDateTime(execution.started_at) ]]</span></div>
+                        <div><span class="text-gray-400">结束时间：</span><span class="text-gray-700">[[ formatDateTime(execution.finished_at) ]]</span></div>
+                        <div><span class="text-gray-400">故障注入：</span><span class="text-gray-700">[[ formatDateTime(execution.fault_inject_at) ]]</span></div>
+                        <div><span class="text-gray-400">故障恢复：</span><span class="text-gray-700">[[ formatDateTime(execution.fault_end_at) ]]</span></div>
                     </div>
                 </div>
 
@@ -652,6 +680,8 @@ createApp({
                 limit: 1000,
                 metric_names: '',
                 service_name: '',
+                metrics_scope: 'service',  // 'service' | 'node'
+                node_name: '',
                 anomalous_only: 'false',
                 log_limit: 500,
                 entity_type: '',
@@ -834,7 +864,19 @@ createApp({
             if (!isoStr) return '';
             try {
                 const d = new Date(isoStr);
-                return d.toLocaleTimeString('zh-CN', { hour12: false });
+                if (isNaN(d.getTime())) return isoStr;
+                const pad = n => String(n).padStart(2, '0');
+                return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+            } catch { return isoStr; }
+        },
+
+        formatDateTime(isoStr) {
+            if (!isoStr) return '-';
+            try {
+                const d = new Date(isoStr);
+                if (isNaN(d.getTime())) return isoStr;
+                const pad = n => String(n).padStart(2, '0');
+                return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
             } catch { return isoStr; }
         },
 
@@ -908,9 +950,15 @@ createApp({
                 if (p.trace_id) params.set('trace_id', p.trace_id);
                 if (p.limit) params.set('limit', p.limit);
             } else if (tab === 'metrics') {
-                url = '/api/v1/metrics';
-                if (p.metric_names) params.set('metric_names', p.metric_names);
-                if (p.service_name) params.set('service_name', p.service_name);
+                if (p.metrics_scope === 'node') {
+                    url = '/api/v1/node_metrics';
+                    if (p.metric_names) params.set('metric_names', p.metric_names);
+                    if (p.node_name) params.set('node_name', p.node_name);
+                } else {
+                    url = '/api/v1/metrics';
+                    if (p.metric_names) params.set('metric_names', p.metric_names);
+                    if (p.service_name) params.set('service_name', p.service_name);
+                }
             } else if (tab === 'logs') {
                 url = '/api/v1/logs';
                 params.set('anomalous_only', p.anomalous_only);

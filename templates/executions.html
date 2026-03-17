@@ -81,8 +81,8 @@
                         <td class="px-4 py-3 text-center">
                             <span class="exec-badge" :class="'exec-' + ex.status">[[ statusLabel(ex.status) ]]</span>
                         </td>
-                        <td class="px-4 py-3 text-center text-xs text-gray-400">[[ ex.started_at || '-' ]]</td>
-                        <td class="px-4 py-3 text-center text-xs text-gray-400">[[ ex.finished_at || '-' ]]</td>
+                        <td class="px-4 py-3 text-center text-xs text-gray-400">[[ formatDateTime(ex.started_at) ]]</td>
+                        <td class="px-4 py-3 text-center text-xs text-gray-400">[[ formatDateTime(ex.finished_at) ]]</td>
                         <td class="px-4 py-3 text-center" @click.stop>
                             <div class="flex items-center justify-center gap-1.5">
                                 <a :href="'/executions/' + ex.id"
@@ -170,6 +170,16 @@ createApp({
 
         faultTypeLabel(ft) { return FAULT_TYPE_LABELS[ft] || ft || '-'; },
         statusLabel(s) { return STATUS_LABELS[s] || s; },
+
+        formatDateTime(isoStr) {
+            if (!isoStr) return '-';
+            try {
+                const d = new Date(isoStr);
+                if (isNaN(d.getTime())) return isoStr;
+                const pad = n => String(n).padStart(2, '0');
+                return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+            } catch { return isoStr; }
+        },
 
         faultBadgeClass(ft) {
             if (!ft) return 'fault-other';
