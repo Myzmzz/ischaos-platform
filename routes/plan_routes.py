@@ -83,13 +83,43 @@ def update_plan(plan_id: int):
     return jsonify({"code": 200, "message": "success", "data": plan})
 
 
+@plan_bp.route("/plans/batch-delete", methods=["POST"])
+def batch_delete_plans():
+    """批量删除演练计划。
+
+    请求体 JSON：{"ids": [1, 2, 3]}
+    有活跃执行记录的计划会被跳过，返回跳过原因。
+    """
+    data = request.get_json(silent=True)
+    if not data or not isinstance(data.get("ids"), list):
+        return jsonify({"code": 400, "message": "请提供 ids 列表", "data": None}), 400
+
+    plan_ids = data["ids"]
+    if not plan_ids:
+        return jsonify({"code": 400, "message": "ids 列表不能为空", "data": None}), 400
+
+    result = plan_model.delete_batch(plan_ids)
+    return jsonify({"code": 200, "message": "success", "data": result})
+
+
 @plan_bp.route("/plans/<int:plan_id>", methods=["DELETE"])
 def delete_plan(plan_id: int):
-    """删除演练计划。"""
-    success = plan_model.delete(plan_id)
-    if not success:
+    """删除演练计划（级联删除关联执行记录）。
+
+    如果该计划存在活跃（running/pending）的执行记录，返回 409。
+    """
+    result = plan_model.delete(plan_id)
+    if result["ok"]:
+        return jsonify({"code": 200, "message": "success", "data": None})
+    if result["reason"] == "not_found":
         return jsonify({"code": 404, "message": "计划不存在", "data": None}), 404
-    return jsonify({"code": 200, "message": "success", "data": None})
+    if result["reason"] == "has_active":
+        return jsonify({
+            "code": 409,
+            "message": f"该计划存在 {result['active_count']} 个活跃执行记录，无法删除",
+            "data": None,
+        }), 409
+    return jsonify({"code": 500, "message": "未知错误", "data": None}), 500
 
 
 @plan_bp.route("/plans/<int:plan_id>/workflow", methods=["GET"])

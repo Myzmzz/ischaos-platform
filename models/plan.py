@@ -129,16 +129,73 @@ def update(plan_id: int, data: dict[str, Any]) -> Optional[dict[str, Any]]:
     return get_by_id(plan_id)
 
 
-def delete(plan_id: int) -> bool:
-    """删除演练计划。
+def delete(plan_id: int) -> dict[str, Any]:
+    """删除演练计划，级联删除关联的执行记录。
+
+    如果该计划存在 running 或 pending 状态的执行记录，则拒绝删除。
 
     Args:
         plan_id: 计划 ID
 
     Returns:
-        True 删除成功，False 记录不存在
+        {"ok": True} 删除成功
+        {"ok": False, "reason": "not_found"} 记录不存在
+        {"ok": False, "reason": "has_active", "active_count": N} 有活跃执行
     """
     db = get_db()
-    cursor = db.execute("DELETE FROM drill_plan WHERE id = ?", (plan_id,))
+
+    # 检查计划是否存在
+    row = db.execute("SELECT id FROM drill_plan WHERE id = ?", (plan_id,)).fetchone()
+    if row is None:
+        return {"ok": False, "reason": "not_found"}
+
+    # 检查是否有活跃（running/pending）的执行记录
+    active = db.execute(
+        "SELECT COUNT(*) AS cnt FROM drill_execution WHERE plan_id = ? AND status IN ('running', 'pending')",
+        (plan_id,),
+    ).fetchone()
+    if active["cnt"] > 0:
+        return {"ok": False, "reason": "has_active", "active_count": active["cnt"]}
+
+    # 级联删除：先删关联的 service_fault_lock（通过 execution_id），再删执行记录，最后删计划
+    exec_ids = db.execute(
+        "SELECT id FROM drill_execution WHERE plan_id = ?", (plan_id,)
+    ).fetchall()
+    if exec_ids:
+        id_list = [r["id"] for r in exec_ids]
+        placeholders = ",".join("?" * len(id_list))
+        db.execute(f"DELETE FROM service_fault_lock WHERE execution_id IN ({placeholders})", id_list)
+    db.execute("DELETE FROM drill_execution WHERE plan_id = ?", (plan_id,))
+    db.execute("DELETE FROM drill_plan WHERE id = ?", (plan_id,))
     db.commit()
-    return cursor.rowcount > 0
+
+    return {"ok": True}
+
+
+def delete_batch(plan_ids: list[int]) -> dict[str, Any]:
+    """批量删除演练计划。
+
+    对每个 plan_id 执行与 delete() 相同的逻辑：
+    有活跃执行记录的计划会被跳过。
+
+    Args:
+        plan_ids: 要删除的计划 ID 列表
+
+    Returns:
+        {"deleted": [id, ...], "skipped": [{"id": x, "reason": "..."}, ...]}
+    """
+    deleted: list[int] = []
+    skipped: list[dict[str, Any]] = []
+
+    for pid in plan_ids:
+        result = delete(pid)
+        if result["ok"]:
+            deleted.append(pid)
+        else:
+            reason = result["reason"]
+            if reason == "not_found":
+                skipped.append({"id": pid, "reason": "计划不存在"})
+            elif reason == "has_active":
+                skipped.append({"id": pid, "reason": f"存在 {result['active_count']} 个活跃执行记录"})
+
+    return {"deleted": deleted, "skipped": skipped}
