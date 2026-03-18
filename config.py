@@ -17,7 +17,7 @@ class Config:
     CHAOS_MESH_URL: str = os.getenv("CHAOS_MESH_URL", "http://116.63.51.45:30854")
 
     # Coroot 观测平台
-    COROOT_URL: str = os.getenv("COROOT_URL", "http://coroot-coroot.coroot:8080")
+    COROOT_URL: str = os.getenv("COROOT_URL", "http://116.63.51.45:30800")
     COROOT_USERNAME: str = os.getenv("COROOT_USERNAME", "admin")
     COROOT_PASSWORD: str = os.getenv("COROOT_PASSWORD", "123456")
     COROOT_PROJECT_ID: str = os.getenv("COROOT_PROJECT_ID", "60hjkbo3")

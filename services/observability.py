@@ -489,6 +489,80 @@ def get_entities(entity_type: Optional[str] = None) -> Dict[str, Any]:
 # ============================================================================
 
 
+def get_node_metrics(
+    start_time: Optional[int] = None,
+    end_time: Optional[int] = None,
+    metric_names: Optional[str] = None,
+    node_name: Optional[str] = None,
+    interval: Optional[int] = None,
+) -> Dict[str, Any]:
+    """获取节点级监控指标时序数据。
+
+    从指定节点的 Coroot 数据中提取各类指标。
+    """
+    start_time, end_time = _default_range(start_time, end_time)
+    client = get_coroot_client()
+
+    # 确定目标节点
+    if not node_name:
+        node_name = "tcse-v100-02"
+
+    # 确定需要获取的指标
+    if metric_names:
+        requested = [m.strip() for m in metric_names.split(",")]
+    else:
+        requested = [m for m in METRIC_EXTRACT_CONFIG.keys() if METRIC_EXTRACT_CONFIG.get(m, {}).get("source") == "node"]
+
+    # 获取节点数据
+    try:
+        node_data = client.get_node(node_name, start_time, end_time)
+        node_widgets = node_data.get("data", {}).get("widgets", [])
+    except Exception as e:
+        logger.warning("获取节点数据失败: %s", e)
+        node_widgets = []
+
+    # 提取各指标
+    metrics: List[Dict[str, Any]] = []
+    for metric_name in requested:
+        config = METRIC_EXTRACT_CONFIG.get(metric_name)
+        if not config:
+            continue
+
+        chart = None
+        if node_widgets:
+            chart = _find_chart_in_widgets(
+                node_widgets,
+                config["keyword"],
+                config.get("chart_group_idx"),
+            )
+
+        if chart:
+            values = _chart_to_values(chart, config.get("transform"))
+            # 按 interval 采样
+            if interval and interval > 0 and values:
+                interval_ms = interval * 1000
+                sampled = []
+                last_ts = 0
+                for v in values:
+                    if v["timestamp"] - last_ts >= interval_ms:
+                        sampled.append(v)
+                        last_ts = v["timestamp"]
+                values = sampled
+        else:
+            values = []
+
+        metrics.append({
+            "metric_name": metric_name,
+            "unit": config["unit"],
+            "values": values,
+        })
+
+    return {
+        "node_name": node_name,
+        "metrics": metrics,
+    }
+
+
 def get_fault_status() -> Dict[str, Any]:
     """获取当前所有活跃故障的状态。
 

@@ -76,6 +76,31 @@ def get_metrics():
         return jsonify({"code": 500, "message": f"获取指标数据失败: {e}", "data": None}), 500
 
 
+@observability_bp.route("/node_metrics", methods=["GET"])
+def get_node_metrics():
+    """获取节点级监控指标时序数据。
+
+    查询参数：
+        start_time: 起始时间戳（毫秒）
+        end_time: 结束时间戳（毫秒）
+        metric_names: 逗号分隔的指标名（如 "disk_read_bytes,disk_write_bytes"）
+        node_name: 节点名称（如 "tcse-v100-02"）
+        interval: 采样间隔（秒，可选）
+    """
+    try:
+        data = observability.get_node_metrics(
+            start_time=request.args.get("start_time", type=int),
+            end_time=request.args.get("end_time", type=int),
+            metric_names=request.args.get("metric_names"),
+            node_name=request.args.get("node_name"),
+            interval=request.args.get("interval", type=int),
+        )
+        return jsonify({"code": 200, "message": "success", "data": data})
+    except Exception as e:
+        logger.error("获取节点指标数据失败: %s", e)
+        return jsonify({"code": 500, "message": f"获取节点指标数据失败: {e}", "data": None}), 500
+
+
 @observability_bp.route("/logs", methods=["GET"])
 def get_logs():
     """获取结构化日志数据。
