@@ -58,9 +58,10 @@ def get_metrics():
         app_id = request.args.get("app_id")
         service_name = request.args.get("service_name")
         if service_name:
+            resource_type = "StatefulSet" if service_name == "nacos" else "Deployment"
             app_id = (
                 f"{Config.COROOT_PROJECT_ID}:{Config.TARGET_NAMESPACE}"
-                f":Deployment:{service_name}"
+                f":{resource_type}:{service_name}"
             )
 
         data = observability.get_metrics(
