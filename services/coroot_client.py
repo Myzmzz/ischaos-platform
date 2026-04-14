@@ -197,9 +197,12 @@ class CorootClient:
         self,
         from_ts: Optional[int] = None,
         to_ts: Optional[int] = None,
+        query: Optional[str] = None,
     ) -> Dict[str, Any]:
         """获取调用链概览。"""
-        params: Dict[str, Any] = {}
+        
+        params: Dict[str, Any] = {"query": json.dumps(query)}
+        
         if from_ts is not None:
             params["from"] = from_ts
         if to_ts is not None:

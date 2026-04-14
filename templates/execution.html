@@ -262,7 +262,7 @@
                     <div v-if="collectActiveTab === 'traces'">
                         <label class="param-label block mb-1">Limit</label>
                         <input v-model.number="collectParams.limit" type="number"
-                               class="param-input w-24" placeholder="1000">
+                               class="param-input w-24" placeholder="100">
                     </div>
                     <!-- metrics 额外参数 -->
                     <div v-if="collectActiveTab === 'metrics'">
@@ -677,7 +677,7 @@ createApp({
                 start_time: null,
                 end_time: null,
                 trace_id: '',
-                limit: 1000,
+                limit: 100,
                 metric_names: '',
                 service_name: '',
                 metrics_scope: 'service',  // 'service' | 'node'
