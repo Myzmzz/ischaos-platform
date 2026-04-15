@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from config import Config
 from services.coroot_client import get_coroot_client, CorootClientError
 from services import k8s_client
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger(__name__)
 
@@ -114,20 +115,23 @@ def get_traces(
             "trace_id": tid,
             "spans": [],
         }
-        data_map["spans"] = []
         query_params["trace_id"] = tid
-        trace_data = client.get_overview_traces(start_time, end_time, query_params)
-        trace = trace_data.get("data", {}).get("traces", {}).get("trace", [])
-        for span in trace:
-            data_map["spans"].append({
-                "span_id": span.get("id", ""),
-                "parent_id": span.get("parent_id", "") or "0",
-                "service_name": span.get("service", ""),
-                "operation_name": span.get("name", ""),
-                "latency": int(span.get("duration", 0) * 1000),  # ms → μs
-                "status_code": 1 if span.get("status", {}).get("error") else 0,
-                "timestamp": span.get("timestamp", 0),
-            })
+        try:
+            trace_data = client.get_overview_traces(start_time, end_time, query_params)
+            trace = trace_data.get("data", {}).get("traces", {}).get("trace", [])
+            for span in trace:
+                data_map["spans"].append({
+                    "span_id": span.get("id", ""),
+                    "parent_id": span.get("parent_id", "") or "0",
+                    "service_name": span.get("service", ""),
+                    "operation_name": span.get("name", ""),
+                    "latency": int(span.get("duration", 0) * 1000),  # ms → μs
+                    "status_code": 1 if span.get("status", {}).get("error") else 0,
+                    "timestamp": span.get("timestamp", 0),
+                })
+        except Exception as e:
+            logger.debug("获取 %s trace 失败: %s", tid, e)
+            continue
         data.append(data_map)
 
     return {

@@ -15,7 +15,7 @@ from config import Config
 logger = logging.getLogger(__name__)
 
 # API 请求超时（秒）
-REQUEST_TIMEOUT = 15
+REQUEST_TIMEOUT = 300
 
 
 def _log_response(method: str, url: str, resp: requests.Response) -> None:
