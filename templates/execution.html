@@ -254,11 +254,11 @@
                                class="param-input w-44" placeholder="留空=当前时间">
                     </div>
                     <!-- traces 额外参数 -->
-                    <div v-if="collectActiveTab === 'traces'">
+                    <!-- <div v-if="collectActiveTab === 'traces'">
                         <label class="param-label block mb-1">Trace ID</label>
                         <input v-model="collectParams.trace_id" type="text"
                                class="param-input w-56" placeholder="可选，精确查找">
-                    </div>
+                    </div> -->
                     <div v-if="collectActiveTab === 'traces'">
                         <label class="param-label block mb-1">Limit</label>
                         <input v-model.number="collectParams.limit" type="number"
@@ -356,11 +356,11 @@
                                  class="border border-gray-200 rounded-lg overflow-hidden">
                                 <!-- trace 头部（可点击展开） -->
                                 <div class="flex items-center justify-between px-4 py-2.5 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
-                                     @click="toggleTrace(tIdx)">
+                                     @click="toggleTrace(tIdx,t.trace_id)">
                                     <div class="flex items-center gap-3">
                                         <span class="text-xs text-gray-400 select-none">[[ expandedTraces[tIdx] ? '&#9660;' : '&#9654;' ]]</span>
                                         <span class="font-mono text-xs text-blue-600 font-medium">[[ t.trace_id ]]</span>
-                                        <span class="text-xs text-gray-400">[[ t.spans.length ]] spans</span>
+                                        <span class="text-xs text-gray-400" v-if="t.spans.length">[[ t.spans.length ]] spans</span>
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <span v-if="getTraceErrorCount(t) > 0"
@@ -368,7 +368,8 @@
                                             [[ getTraceErrorCount(t) ]] errors
                                         </span>
                                         <span class="text-xs text-gray-400">
-                                            总延迟: [[ getTraceMaxLatency(t) ]]
+                                            <!-- 总延迟: [[ getTraceMaxLatency(t) ]] -->
+                                            总延迟: [[ getTraceTotalLatency(t) ]]
                                         </span>
                                     </div>
                                 </div>
@@ -918,8 +919,23 @@ createApp({
             }
         },
 
-        toggleTrace(idx) {
-            this.expandedTraces[idx] = !this.expandedTraces[idx];
+        async toggleTrace(idx,trace_id) {
+            if(this.collectData.traces[idx].spans.length > 0){
+                this.expandedTraces[idx] = !this.expandedTraces[idx];
+                return;
+            }
+            try {
+                const resp = await fetch(`/api/v1/traces?trace_id=${trace_id}`);
+                const json = await resp.json();
+                if (json.code === 200) {
+                    this.collectData.traces[idx].spans = json.data.spans;
+                    this.expandedTraces[idx] = !this.expandedTraces[idx];
+                } else {
+                    this.collectError = json.message || '查询失败';
+                }
+            } catch (e) {
+                this.collectError = '网络请求失败: ' + e.message;
+            }
         },
 
         getTraceErrorCount(trace) {
@@ -933,6 +949,12 @@ createApp({
             if (maxUs >= 1000000) return (maxUs / 1000000).toFixed(2) + 's';
             if (maxUs >= 1000) return (maxUs / 1000).toFixed(1) + 'ms';
             return maxUs + 'us';
+        },
+        getTraceTotalLatency(trace) {
+            const totalUs = trace.latency || 0;
+            if (totalUs >= 1000000) return (totalUs / 1000000).toFixed(2) + 's';
+            if (totalUs >= 1000) return (totalUs / 1000).toFixed(1) + 'ms';
+            return totalUs + 'us';
         },
 
         /**
