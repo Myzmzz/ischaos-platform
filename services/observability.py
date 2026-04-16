@@ -129,7 +129,13 @@ def get_traces(
     for t in traces:
         data.append({
             "trace_id": t.get("trace_id", ""),
-            "latency": int(t.get("duration", 0) * 1000),  # ms → μs
+            "id": t.get("id", ""),
+            "service": t.get("service", ""),
+            "name": t.get("name", ""),
+            "timestamp": t.get("timestamp", 0),
+            "status": t.get("status", ""),
+            "status_code": 1 if t.get("status", {}).get("error") else 0,
+            "latency": t.get("duration", 0),  # ms
             "spans": [],
         })
     return {

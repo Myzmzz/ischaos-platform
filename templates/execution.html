@@ -952,9 +952,8 @@ createApp({
         },
         getTraceTotalLatency(trace) {
             const totalUs = trace.latency || 0;
-            if (totalUs >= 1000000) return (totalUs / 1000000).toFixed(2) + 's';
-            if (totalUs >= 1000) return (totalUs / 1000).toFixed(1) + 'ms';
-            return totalUs + 'us';
+            if (totalUs >= 1000) return (totalUs / 1000).toFixed(2) + 's';
+            return totalUs.toFixed(1) + 'ms';
         },
 
         /**
