@@ -20,7 +20,7 @@ class Config:
     COROOT_URL: str = os.getenv("COROOT_URL", "http://116.63.51.45:30800")
     COROOT_USERNAME: str = os.getenv("COROOT_USERNAME", "admin")
     COROOT_PASSWORD: str = os.getenv("COROOT_PASSWORD", "123456")
-    COROOT_PROJECT_ID: str = os.getenv("COROOT_PROJECT_ID", "60hjkbo3")
+    COROOT_PROJECT_ID: str = os.getenv("COROOT_PROJECT_ID", "9auios5b")
 
     # Kubernetes 配置
     KUBECONFIG_PATH: str = os.getenv(
