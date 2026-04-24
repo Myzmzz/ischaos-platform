@@ -104,7 +104,7 @@ def get_traces(
         query_params["trace_id"] = trace_id
         spans = []
         trace_data = client.get_overview_traces(start_time, end_time, query_params)
-        trace = trace_data.get("data", {}).get("traces", {}).get("trace", [])
+        trace = trace_data.get("data", {}).get("traces", {}).get("trace") or []
         for span in trace:
             spans.append({
                 "span_id": span.get("id", ""),
@@ -123,7 +123,7 @@ def get_traces(
         
     traces_data = client.get_overview_traces(start_time, end_time, query_params)
 
-    traces = traces_data.get("data", {}).get("traces", {}).get("traces", [])[:limit]
+    traces = traces_data.get("data", {}).get("traces", {}).get("traces") or [][:limit]
 
     data = []
     for t in traces:
@@ -142,81 +142,6 @@ def get_traces(
         "total": len(data),
         "traces": data,
     }
-
-
-    # for t in traces:
-    #     tid = t.get("trace_id", "")
-    #     data_map = {
-    #         "trace_id": tid,
-    #         "spans": [],
-    #     }
-    #     query_params["trace_id"] = tid
-    #     try:
-    #         trace_data = client.get_overview_traces(start_time, end_time, query_params)
-    #         trace = trace_data.get("data", {}).get("traces", {}).get("trace", [])
-    #         for span in trace:
-    #             data_map["spans"].append({
-    #                 "span_id": span.get("id", ""),
-    #                 "parent_id": span.get("parent_id", "") or "0",
-    #                 "service_name": span.get("service", ""),
-    #                 "operation_name": span.get("name", ""),
-    #                 "latency": int(span.get("duration", 0) * 1000),  # ms → μs
-    #                 "status_code": 1 if span.get("status", {}).get("error") else 0,
-    #                 "timestamp": span.get("timestamp", 0),
-    #             })
-    #     except Exception as e:
-    #         logger.debug("获取 %s trace 失败: %s", tid, e)
-    #         continue
-    #     data.append(data_map)
-
-    # return {
-    #     "total": len(data),
-    #     "traces": data,
-    # }
-
-    # tt_apps = _get_tt_apps()
-
-    # # 收集所有 spans
-    # all_spans: List[Dict[str, Any]] = []
-    # for app in tt_apps:
-    #     app_id = app["id"]
-    #     try:
-    #         tracing_data = client.get_app_tracing(app_id, start_time, end_time)
-    #         spans = tracing_data.get("data", {}).get("spans") or []
-    #         all_spans.extend(spans)
-    #     except Exception as e:
-    #         logger.debug("获取 %s tracing 失败: %s", app_id, e)
-    #         continue
-
-    # # 如果指定了 trace_id，过滤
-    # if trace_id:
-    #     all_spans = [s for s in all_spans if s.get("trace_id") == trace_id]
-
-    # # 按 trace_id 分组
-    # trace_map: Dict[str, List[Dict[str, Any]]] = {}
-    # for span in all_spans:
-    #     tid = span.get("trace_id", "")
-    #     if tid not in trace_map:
-    #         trace_map[tid] = []
-    #     trace_map[tid].append({
-    #         "span_id": span.get("id", ""),
-    #         "parent_id": span.get("parent_id", "") or "0",
-    #         "service_name": span.get("service", ""),
-    #         "operation_name": span.get("name", ""),
-    #         "latency": int(span.get("duration", 0) * 1000),  # ms → μs
-    #         "status_code": 1 if span.get("status", {}).get("error") else 0,
-    #         "timestamp": span.get("timestamp", 0),
-    #     })
-
-    # # 构造响应
-    # traces = []
-    # for tid, spans in list(trace_map.items())[:limit]:
-    #     traces.append({"trace_id": tid, "spans": spans})
-
-    # return {
-    #     "total": len(traces),
-    #     "traces": traces,
-    # }
 
 
 # ============================================================================
