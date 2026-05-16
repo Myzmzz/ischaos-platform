@@ -80,7 +80,7 @@ def build_workflow(plan: dict) -> Tuple[str, dict]:
     entry_name = f"fault-{plan['id']}-{timestamp}"
 
     # 组装 Workflow JSON — FaultConfig 格式
-    # deadline 设为 duration 的 2 倍，给 Recover 留时间
+    # deadline 固定为 1h，给足余量；实际终止由 execution_manager 的 auto-stop 控制
     workflow_json: Dict[str, Any] = {
         "apiVersion": "chaos-mesh.org/v1alpha1",
         "kind": "Workflow",
@@ -94,7 +94,7 @@ def build_workflow(plan: dict) -> Tuple[str, dict]:
                 {
                     "name": entry_name,
                     "templateType": "FaultConfig",
-                    "deadline": _double_duration(duration),
+                    "deadline": "1h",
                     "list": [
                         {
                             "type": "Inject",
@@ -116,6 +116,28 @@ def build_workflow(plan: dict) -> Tuple[str, dict]:
     }
 
     return workflow_name, workflow_json
+
+
+def _ensure_duration_unit(value: str, default_unit: str = "ms") -> str:
+    """确保时间值带有单位后缀，防止 Chaos Mesh admission webhook 校验失败。
+
+    如果 value 是纯数字字符串（如 "10"、"100"），自动追加 default_unit；
+    如果已包含单位（如 "10ms"、"1s"），原样返回。
+
+    Args:
+        value: 时间值字符串
+        default_unit: 当缺少单位时追加的默认单位，默认 "ms"
+
+    Returns:
+        带单位的时间值字符串
+    """
+    value = str(value).strip()
+    # 纯数字（含小数）则追加默认单位
+    try:
+        float(value)
+        return f"{value}{default_unit}"
+    except ValueError:
+        return value
 
 
 def _double_duration(duration: str) -> str:
@@ -186,8 +208,8 @@ def _build_network_chaos(
 
     if action == "delay":
         spec["delay"] = {
-            "latency": params.get("latency", "200ms"),
-            "jitter": params.get("jitter", "0ms"),
+            "latency": _ensure_duration_unit(params.get("latency", "200ms")),
+            "jitter": _ensure_duration_unit(params.get("jitter", "0ms")),
             "correlation": params.get("correlation", "0"),
         }
     elif action == "loss":

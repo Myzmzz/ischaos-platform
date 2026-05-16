@@ -727,9 +727,9 @@ createApp({
             }
 
             const nodeInfo = this._getNodeInfo();
-            if (!nodeInfo || !nodeInfo.stepSpanList) return steps;
+            const spanList = nodeInfo && nodeInfo.stepSpanList ? nodeInfo.stepSpanList : [];
 
-            const spanList = nodeInfo.stepSpanList;
+            // 先从 Chaos Mesh stepSpanList 填充
             for (let i = 0; i < Math.min(spanList.length, 3); i++) {
                 const span = spanList[i];
                 const hasStart = span.startTime && span.startTime !== '1970-01-01T00:00:00Z' && span.startTime !== null;
@@ -745,6 +745,31 @@ createApp({
                 } else {
                     steps[i].state = '';
                 }
+            }
+
+            // 手动/自动 stop 后 Chaos Mesh 不会补全步骤时间，
+            // 此时用 execution 自身的时间戳将所有步骤标记为完成
+            if (this.execution && this.execution.status === 'completed' && !this._isWorkflowFinished()) {
+                const exec = this.execution;
+                // execution 时间戳为毫秒数，转为 ISO 字符串供 formatTime 使用
+                const msToIso = (ms) => ms ? new Date(ms).toISOString() : null;
+                const injectAt = msToIso(exec.fault_inject_at) || msToIso(exec.started_at) || null;
+                const endAt = msToIso(exec.fault_end_at) || msToIso(exec.finished_at) || null;
+
+                // Inject (注入)
+                if (steps[0].state !== 'done') {
+                    steps[0].state = 'done';
+                    steps[0].startTime = steps[0].startTime || injectAt;
+                    steps[0].endTime = steps[0].endTime || injectAt;
+                }
+                // Wait (等待)
+                steps[1].state = 'done';
+                steps[1].startTime = steps[1].startTime || injectAt;
+                steps[1].endTime = steps[1].endTime || endAt;
+                // Recover (恢复)
+                steps[2].state = 'done';
+                steps[2].startTime = steps[2].startTime || endAt;
+                steps[2].endTime = steps[2].endTime || endAt;
             }
 
             return steps;

@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 # train-ticket 命名空间过滤
 TRAIN_TICKET_NAMESPACE = Config.TARGET_NAMESPACE
 
+# train-ticket 中以 StatefulSet 方式部署的服务
+_STATEFULSET_SERVICES = frozenset({"nacos", "nacosdb-mysql", "tsdb-mysql"})
+
 
 # ============================================================================
 # 辅助工具
@@ -62,13 +65,20 @@ def _extract_service_name(app_id: str) -> str:
 
 
 def _is_train_ticket_service(app_id: str) -> bool:
-    """判断是否为 train-ticket 命名空间的服务型应用（排除中间件）。"""
+    """判断是否为 train-ticket 命名空间的应用。"""
     info = _parse_app_id(app_id)
-    if info["namespace"] != TRAIN_TICKET_NAMESPACE:
-        return False
-    name = info["name"].lower()
-    db_keywords = ["mongo", "mysql", "rabbitmq", "redis"]
-    return not any(kw in name for kw in db_keywords)
+    return info["namespace"] == TRAIN_TICKET_NAMESPACE
+
+
+def _resolve_kind(service_name: str) -> str:
+    """根据服务名返回 K8s 资源类型（Deployment 或 StatefulSet）。"""
+    return "StatefulSet" if service_name in _STATEFULSET_SERVICES else "Deployment"
+
+
+def build_app_id(service_name: str) -> str:
+    """构造 Coroot app_id，自动识别 Kind。"""
+    kind = _resolve_kind(service_name)
+    return f"{Config.COROOT_PROJECT_ID}:{TRAIN_TICKET_NAMESPACE}:{kind}:{service_name}"
 
 
 def _get_tt_apps() -> List[Dict[str, Any]]:
@@ -296,10 +306,7 @@ def get_metrics(
 
     # 确定目标应用
     if not app_id:
-        app_id = (
-            f"{Config.COROOT_PROJECT_ID}:{TRAIN_TICKET_NAMESPACE}"
-            f":Deployment:ts-travel-service"
-        )
+        app_id = build_app_id("ts-travel-service")
 
     # 确定需要获取的指标
     if metric_names:

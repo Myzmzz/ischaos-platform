@@ -139,10 +139,8 @@ def _get_node_status(node: client.V1Node) -> str:
 
 
 def _is_target_service(pod: client.V1Pod) -> bool:
-    """判断 Pod 是否属于目标业务服务（排除中间件）。"""
-    service_name = _get_pod_service_name(pod).lower()
-    db_keywords = ("mongo", "mysql", "rabbitmq", "redis")
-    return not any(kw in service_name for kw in db_keywords)
+    """判断 Pod 是否属于目标业务服务（包含所有 train-ticket 命名空间服务）。"""
+    return True
 
 
 # ============================================================================
@@ -315,19 +313,15 @@ def _get_dependencies_from_coroot() -> List[Dict[str, str]]:
         all_apps = overview.get("data", {}).get("applications", [])
 
         namespace = Config.TARGET_NAMESPACE
-        db_keywords = ("mongo", "mysql", "rabbitmq", "redis")
         dependencies: List[Dict[str, str]] = []
         seen: set = set()
 
-        # 过滤出 train-ticket 命名空间的业务服务
+        # 过滤出 train-ticket 命名空间的所有应用
         tt_apps = []
         for app in all_apps:
             app_id = app.get("id", "")
             parts = app_id.split(":")
             if len(parts) < 4 or parts[1] != namespace:
-                continue
-            name = parts[3].lower()
-            if any(kw in name for kw in db_keywords):
                 continue
             tt_apps.append(app)
 
@@ -346,10 +340,8 @@ def _get_dependencies_from_coroot() -> List[Dict[str, str]]:
                     if len(dep_parts) < 4:
                         continue
                     callee = dep_parts[3]
-                    # 排除中间件和非同命名空间的依赖
+                    # 排除非同命名空间的依赖
                     if dep_parts[1] != namespace:
-                        continue
-                    if any(kw in callee.lower() for kw in db_keywords):
                         continue
                     key = (caller, callee)
                     if key not in seen:

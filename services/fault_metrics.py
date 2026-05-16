@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from config import Config
 from services.coroot_client import get_coroot_client, CorootClientError
+from services.observability import build_app_id
 
 logger = logging.getLogger(__name__)
 
@@ -201,11 +202,8 @@ def _fetch_widgets(
         return report.get("widgets", []) if report else []
 
     else:
-        # K8s 层级 → 目标服务应用
-        app_id = (
-            f"{Config.COROOT_PROJECT_ID}:{Config.TARGET_NAMESPACE}"
-            f":Deployment:{target_service}"
-        )
+        # K8s 层级 → 目标服务应用（自动识别 Deployment/StatefulSet）
+        app_id = build_app_id(target_service)
         raw_data = client.get_application(app_id, from_ts, to_ts)
         report = _find_report(raw_data, config["report_name"])
         return report.get("widgets", []) if report else []

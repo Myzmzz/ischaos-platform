@@ -10,7 +10,8 @@
 
 判定逻辑:
     - Workflow 三个步骤 (Inject/Wait/Recover) 均有 startTime + endTime → completed
-    - 超过 deadline (duration × 2) 仍未完成 → failed (超时)
+    - 超过 duration 但未超时 → 自动调用 stop API 终止 Workflow → completed
+    - 超过 duration × 3 仍未完成 → failed (超时兜底)
     - Chaos Mesh 返回异常 → 保持 running，等待下次同步
 """
 
@@ -21,7 +22,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from models import execution as execution_model
 from models import plan as plan_model
-from services.chaos_client import get_workflow_status, ChaosClientError
+from services.chaos_client import get_workflow_status, stop_workflow, ChaosClientError
 from services.fault_lock import release_lock
 
 logger = logging.getLogger(__name__)
@@ -74,14 +75,20 @@ def sync_execution_status(execution_id: int) -> Tuple[Dict[str, Any], Optional[D
         execution = execution_model.get_by_id(execution_id)
         return execution, chaos_status
 
-    # 2) 检查是否超时
+    # 2) 检查是否 duration 到期，应自动终止 Workflow
     plan = plan_model.get_by_id(execution["plan_id"])
+    if plan and _should_auto_stop(execution, plan, now_utc):
+        _auto_stop_workflow(execution, plan, now_str)
+        execution = execution_model.get_by_id(execution_id)
+        return execution, chaos_status
+
+    # 3) 检查是否超时（duration × 3 兜底）
     if plan and _is_timed_out(execution, plan, now_utc):
         _mark_timeout(execution, plan, now_str)
         execution = execution_model.get_by_id(execution_id)
         return execution, chaos_status
 
-    # 3) 更新中间状态的时间点（如 fault_inject_at）
+    # 4) 更新中间状态的时间点（如 fault_inject_at）
     _update_intermediate_times(execution, step_span_list)
     execution = execution_model.get_by_id(execution_id)
 
@@ -167,6 +174,70 @@ def _is_timed_out(
     elapsed = (now - start_dt).total_seconds()
 
     return elapsed > timeout_threshold_s
+
+
+def _should_auto_stop(
+    execution: Dict[str, Any],
+    plan: Dict[str, Any],
+    now: datetime,
+) -> bool:
+    """判断是否应自动终止 Workflow：已过 duration 但未到超时阈值。
+
+    当故障持续时间已到，Workflow 尚未自行完成时，
+    应主动调用 stop API 终止，而不是等待 Chaos Mesh 的 Recover。
+    """
+    started_at = execution.get("started_at")
+    if not started_at:
+        return False
+
+    try:
+        start_dt = datetime.fromtimestamp(started_at / 1000, tz=timezone.utc)
+    except (ValueError, TypeError, OSError):
+        return False
+
+    duration_s = _parse_duration_seconds(plan.get("duration", "30s"))
+    elapsed = (now - start_dt).total_seconds()
+    return elapsed > duration_s
+
+
+def _auto_stop_workflow(
+    execution: Dict[str, Any],
+    plan: Dict[str, Any],
+    now_str: str,
+) -> None:
+    """自动终止 Workflow 并标记为正常完成，释放故障锁。
+
+    duration 到期后主动调用 Chaos Mesh stop API，
+    不依赖 Workflow 自身的 Recover 流程。
+    stop 失败时仅记录日志（Workflow 可能已被 GC 清理，属正常情况）。
+    """
+    workflow_name = execution["workflow_name"]
+    execution_id = execution["id"]
+
+    try:
+        stop_workflow(workflow_name)
+        logger.info(
+            "自动终止 Workflow: %s (执行 #%d, duration 到期)",
+            workflow_name, execution_id,
+        )
+    except ChaosClientError as e:
+        # Workflow 可能已被 GC 清理（404），属于正常情况
+        logger.warning(
+            "自动终止 Workflow 失败 (可忽略): %s (执行 #%d)",
+            e, execution_id,
+        )
+
+    execution_model.update_status(
+        execution_id, "completed",
+        finished_at=now_str,
+        fault_end_at=now_str,
+    )
+
+    release_lock(plan["target_service"])
+    logger.info(
+        "执行 #%d 已自动完成 (duration 到期)，服务 '%s' 故障锁已释放",
+        execution_id, plan["target_service"],
+    )
 
 
 def _mark_completed(

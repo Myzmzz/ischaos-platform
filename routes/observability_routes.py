@@ -12,6 +12,7 @@ from flask import Blueprint, jsonify, request
 
 from config import Config
 from services import observability
+from services.observability import build_app_id
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ def get_metrics():
         interval: 采样间隔（秒，可选）
     """
     try:
-        # 支持 service_name 参数，自动构建完整 Coroot app_id
+        # 支持 service_name 参数，自动构建完整 Coroot app_id（含 Kind 识别）
         app_id = request.args.get("app_id")
         service_name = request.args.get("service_name")
         if service_name:
