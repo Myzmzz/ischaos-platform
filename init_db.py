@@ -226,8 +226,13 @@ def main() -> None:
     if len(sys.argv) > 1:
         report_path = sys.argv[1]
     else:
+        # 优先查容器/镜像内位置（docs/ 同级），回退到本地开发布局（../docs/）。
         project_root = os.path.dirname(os.path.abspath(__file__))
-        report_path = os.path.join(project_root, "..", "docs", "topology_report.md")
+        candidates = [
+            os.path.join(project_root, "docs", "topology_report.md"),
+            os.path.join(project_root, "..", "docs", "topology_report.md"),
+        ]
+        report_path = next((p for p in candidates if os.path.exists(p)), candidates[0])
 
     report_path = os.path.abspath(report_path)
 

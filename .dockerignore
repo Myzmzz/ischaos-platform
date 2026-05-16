@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+venv/
+.venv/
+env/
+
+# Local SQLite dev DB (PVC will manage runtime DB)
+data/ischaos.db
+data/ischaos.db-shm
+data/ischaos.db-wal
+
+# Git / IDE / OS
+.git/
+.gitignore
+.vscode/
+.idea/
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Env / secrets
+.env
+.env.*
+
+# Build artifacts
+build/
+dist/
+*.egg

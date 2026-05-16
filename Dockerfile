@@ -7,9 +7,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# 确保数据目录存在
-RUN mkdir -p /app/data
+# 确保数据目录存在 + entrypoint 可执行
+RUN mkdir -p /app/data && chmod +x /app/entrypoint.sh
 
 EXPOSE 5000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "600", "app:create_app()"]
+ENTRYPOINT ["/app/entrypoint.sh"]
